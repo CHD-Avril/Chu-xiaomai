@@ -1,6 +1,6 @@
 # 广播台明日歌单征集站
 
-这是一个基于 `HTML + CSS + JavaScript + Bmob` 的静态网站，适合学校广播台每天征集下一天的歌单。
+这是一个基于 `HTML + CSS + JavaScript + Supabase` 的静态网站，适合学校广播台每天征集下一天的歌单。
 
 ## 功能
 
@@ -14,10 +14,10 @@
 
 ## 使用方法
 
-1. 在 Bmob 控制台创建应用。
-2. 准备 `Application ID` 和 `REST API Key`。
-3. 把 `public/bmob-config.js` 里的参数替换成你自己的项目参数。
-4. 如需手动建表，可在 Bmob 控制台建立 `songs` 与 `songLikes` 两张表。
+1. 在 Supabase 控制台创建项目。
+2. 准备 `Project URL` 和 `anon public key`。
+3. 把 `public/supabase-config.js` 里的参数替换成你自己的项目参数。
+4. 在 Supabase SQL 编辑器中创建 `songs` 与 `song_likes` 两张表，并配置 RLS 策略。
 5. 把整个目录部署到任意静态网页服务器。
 
 ## 数据结构
@@ -37,19 +37,19 @@
 }
 ```
 
-### `songLikes`
+### `song_likes`
 
 ```json
 {
-  "songId": "songs objectId",
-  "userId": "local-visitor-id",
-  "playlistDate": "2026-03-31",
-  "createdAt": "bmob auto timestamp"
+  "song_id": "songs uuid",
+  "user_id": "local-visitor-id",
+  "playlist_date": "2026-03-31",
+  "created_at": "database default now()"
 }
 ```
 
 ## 说明
 
 - 当前版本为了保持纯静态部署，使用浏览器本地保存的访客标识来限制重复点赞，所以更准确地说是“一台设备 / 一个浏览器一票”。
-- `Master Key` 绝对不要放到前端代码里；当前前端只会使用 `Application ID` 和 `REST API Key`。
+- `service_role key` 绝对不要放到前端代码里；当前前端只会使用 `Project URL` 和 `anon public key`。
 - 如果后面你们希望严格做到“一个真实学生账号一票”，可以继续接校园统一身份认证、微信登录，或者改成自建后端。

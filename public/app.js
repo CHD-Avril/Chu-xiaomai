@@ -1,14 +1,13 @@
-import { bmobConfig, hasValidBmobConfig } from "./bmob-config.js";
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+import { supabaseConfig, hasValidSupabaseConfig } from "./supabase-config.js";
 
 const SONGS_PER_PAGE = 6;
-const POLL_INTERVAL_MS = 20000;
 const TARGET_DATE = getTomorrowDateKey();
 
 const state = {
   userId: "",
   songs: [],
   likedSongIds: new Set(),
-  likeObjectIdsBySongId: new Map(),
   sortMode: "likes",
   searchTerm: "",
   currentPage: 1,
@@ -34,24 +33,26 @@ const refs = {
   pagination: document.querySelector("#pagination"),
 };
 
-let syncTimerId = 0;
+const supabase = hasValidSupabaseConfig()
+  ? createClient(supabaseConfig.url, supabaseConfig.anonKey)
+  : null;
 
 refs.targetDateLabel.textContent = formatDateLabel(TARGET_DATE);
 
 bindEvents();
 render();
 
-if (!hasValidBmobConfig()) {
+if (!hasValidSupabaseConfig()) {
   refs.firebaseNotice.classList.remove("hidden");
   refs.authStatus.textContent = "等待配置";
   refs.authStatus.style.color = "var(--danger)";
   refs.songsList.innerHTML = createEmptyState(
-    "还没有连接 Bmob",
-    "先填好 bmob-config.js 里的项目参数，再刷新页面，就可以开始投稿和点赞了。"
+    "还没有连接 Supabase",
+    "先填好 supabase-config.js 里的项目参数，再刷新页面，就可以开始投稿和点赞了。"
   );
   syncFormButton();
 } else {
-  bootBmob();
+  bootSupabase();
 }
 
 function bindEvents() {
@@ -70,7 +71,7 @@ function bindEvents() {
   refs.pagination.addEventListener("click", handlePaginationClick);
 }
 
-async function bootBmob() {
+async function bootSupabase() {
   try {
     state.userId = getOrCreateVisitorId();
     state.backendReady = true;
@@ -82,79 +83,65 @@ async function bootBmob() {
 
     refs.authStatus.textContent = "已连接";
     refs.authStatus.style.color = "var(--green)";
-
-    syncTimerId = window.setInterval(() => {
-      syncAllData({ silent: true });
-    }, POLL_INTERVAL_MS);
   } catch (error) {
-    handleBmobError("Bmob 初始化失败，请检查配置或网络。", error);
+    handleSupabaseError(`Supabase 初始化失败：${resolveErrorMessage(error)}`, error);
   }
 }
 
-async function syncAllData(options = {}) {
+async function syncAllData() {
   if (!state.backendReady) {
     return;
   }
 
-  try {
-    const [songs, likes] = await Promise.all([fetchSongs(), fetchLikes()]);
-    state.songs = songs;
-    state.likedSongIds = new Set(likes.map((item) => item.songId));
-    state.likeObjectIdsBySongId = new Map(likes.map((item) => [item.songId, item.objectId]));
-    render();
-  } catch (error) {
-    if (!options.silent) {
-      handleBmobError(`数据同步失败：${resolveErrorMessage(error)}`, error);
-    } else {
-      console.error("静默同步失败", error);
-    }
-  }
+  const [songs, likes] = await Promise.all([fetchSongs(), fetchLikes()]);
+  state.songs = songs;
+  state.likedSongIds = new Set(likes.map((item) => item.song_id));
+  render();
 }
 
 async function fetchSongs() {
-  const response = await bmobRequest(`/classes/${bmobConfig.tables.songs}`, {
-    query: {
-      where: JSON.stringify({
-        playlistDate: TARGET_DATE,
-      }),
-      limit: "500",
-    },
-  });
+  const { data, error } = await supabase
+    .from(supabaseConfig.tables.songs)
+    .select("*")
+    .eq("playlist_date", TARGET_DATE)
+    .limit(500);
 
-  return (response.results ?? []).map((song) => ({
-    id: song.objectId,
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((song) => ({
+    id: song.id,
     title: song.title ?? "",
     artist: song.artist ?? "",
-    titleLower: song.titleLower ?? "",
-    artistLower: song.artistLower ?? "",
-    likesCount: Number.isFinite(song.likesCount) ? song.likesCount : 0,
-    createdAtMs: Date.parse(song.createdAt ?? "") || 0,
-    createdBy: song.createdBy ?? "",
+    titleLower: song.title_lower ?? "",
+    artistLower: song.artist_lower ?? "",
+    likesCount: Number.isFinite(song.likes_count) ? song.likes_count : 0,
+    createdAtMs: Date.parse(song.created_at ?? "") || 0,
+    createdBy: song.created_by ?? "",
   }));
 }
 
 async function fetchLikes() {
-  const response = await bmobRequest(`/classes/${bmobConfig.tables.likes}`, {
-    query: {
-      where: JSON.stringify({
-        playlistDate: TARGET_DATE,
-        userId: state.userId,
-      }),
-      limit: "500",
-    },
-  });
+  const { data, error } = await supabase
+    .from(supabaseConfig.tables.likes)
+    .select("song_id")
+    .eq("playlist_date", TARGET_DATE)
+    .eq("user_id", state.userId)
+    .limit(500);
 
-  return (response.results ?? []).map((like) => ({
-    objectId: like.objectId,
-    songId: like.songId,
-  }));
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
 }
 
 async function handleSongSubmit(event) {
   event.preventDefault();
 
   if (!state.backendReady) {
-    updateFormHint("请先完成 Bmob 配置。", true);
+    updateFormHint("请先完成 Supabase 配置。", true);
     return;
   }
 
@@ -182,24 +169,25 @@ async function handleSongSubmit(event) {
   updateFormHint("正在提交到明日歌单池...", false);
 
   try {
-    await bmobRequest(`/classes/${bmobConfig.tables.songs}`, {
-      method: "POST",
-      body: {
-        title,
-        artist,
-        titleLower,
-        artistLower,
-        playlistDate: TARGET_DATE,
-        likesCount: 0,
-        createdBy: state.userId,
-      },
+    const { error } = await supabase.from(supabaseConfig.tables.songs).insert({
+      title,
+      artist,
+      title_lower: titleLower,
+      artist_lower: artistLower,
+      playlist_date: TARGET_DATE,
+      likes_count: 0,
+      created_by: state.userId,
     });
+
+    if (error) {
+      throw error;
+    }
 
     refs.form.reset();
     updateFormHint("投稿成功，这首歌已经进入明日歌单池。", false);
     await syncAllData();
   } catch (error) {
-    handleBmobError(`投稿失败：${resolveErrorMessage(error)}`, error);
+    handleSupabaseError(`投稿失败：${resolveErrorMessage(error)}`, error);
   } finally {
     state.isSubmitting = false;
     syncFormButton();
@@ -229,9 +217,9 @@ async function handleSongListClick(event) {
       await likeSong(songId);
     }
 
-    await syncAllData({ silent: true });
+    await syncAllData();
   } catch (error) {
-    handleBmobError(`点赞操作失败：${resolveErrorMessage(error)}`, error);
+    handleSupabaseError(`点赞操作失败：${resolveErrorMessage(error)}`, error);
   } finally {
     state.likingSongId = "";
     render();
@@ -239,62 +227,70 @@ async function handleSongListClick(event) {
 }
 
 async function likeSong(songId) {
-  await bmobRequest("/batch", {
-    method: "POST",
-    body: {
-      requests: [
-        {
-          method: "POST",
-          path: `/1/classes/${bmobConfig.tables.likes}`,
-          body: {
-            songId,
-            userId: state.userId,
-            playlistDate: TARGET_DATE,
-          },
-        },
-        {
-          method: "PUT",
-          path: `/1/classes/${bmobConfig.tables.songs}/${songId}`,
-          body: {
-            likesCount: {
-              __op: "Increment",
-              amount: 1,
-            },
-          },
-        },
-      ],
-    },
+  const { error: insertError } = await supabase.from(supabaseConfig.tables.likes).insert({
+    song_id: songId,
+    user_id: state.userId,
+    playlist_date: TARGET_DATE,
   });
+
+  if (insertError) {
+    throw insertError;
+  }
+
+  const { data: song, error: songError } = await supabase
+    .from(supabaseConfig.tables.songs)
+    .select("likes_count")
+    .eq("id", songId)
+    .single();
+
+  if (songError) {
+    throw songError;
+  }
+
+  const { error: updateError } = await supabase
+    .from(supabaseConfig.tables.songs)
+    .update({
+      likes_count: Math.max(0, Number(song.likes_count ?? 0) + 1),
+    })
+    .eq("id", songId);
+
+  if (updateError) {
+    throw updateError;
+  }
 }
 
 async function unlikeSong(songId) {
-  const likeObjectId = state.likeObjectIdsBySongId.get(songId);
+  const { error: deleteError } = await supabase
+    .from(supabaseConfig.tables.likes)
+    .delete()
+    .eq("song_id", songId)
+    .eq("user_id", state.userId)
+    .eq("playlist_date", TARGET_DATE);
 
-  if (!likeObjectId) {
-    throw new Error("未找到对应的点赞记录。");
+  if (deleteError) {
+    throw deleteError;
   }
 
-  await bmobRequest("/batch", {
-    method: "POST",
-    body: {
-      requests: [
-        {
-          method: "DELETE",
-          path: `/1/classes/${bmobConfig.tables.likes}/${likeObjectId}`,
-        },
-        {
-          method: "PUT",
-          path: `/1/classes/${bmobConfig.tables.songs}/${songId}`,
-          body: {
-            likesCount: {
-              __op: "Increment",
-              amount: -1,
-            },
-          },
-        },
-      ],
-    },
-  });
+  const { data: song, error: songError } = await supabase
+    .from(supabaseConfig.tables.songs)
+    .select("likes_count")
+    .eq("id", songId)
+    .single();
+
+  if (songError) {
+    throw songError;
+  }
+
+  const { error: updateError } = await supabase
+    .from(supabaseConfig.tables.songs)
+    .update({
+      likes_count: Math.max(0, Number(song.likes_count ?? 0) - 1),
+    })
+    .eq("id", songId);
+
+  if (updateError) {
+    throw updateError;
+  }
 }
 
 function handlePaginationClick(event) {
@@ -471,36 +467,6 @@ function buildPageNumbers(pageCount, currentPage) {
   return [1, "...", currentPage - 1, currentPage, currentPage + 1, "...", pageCount];
 }
 
-async function bmobRequest(path, options = {}) {
-  const url = new URL(`${trimTrailingSlash(bmobConfig.baseUrl)}${path}`);
-  const requestHeaders = new Headers({
-    "Content-Type": "application/json",
-    "X-Bmob-Application-Id": bmobConfig.applicationId,
-    "X-Bmob-REST-API-Key": bmobConfig.restApiKey,
-  });
-
-  if (options.query) {
-    Object.entries(options.query).forEach(([key, value]) => {
-      url.searchParams.set(key, value);
-    });
-  }
-
-  const response = await fetch(url.toString(), {
-    method: options.method ?? "GET",
-    headers: requestHeaders,
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok || data.error) {
-    const message = data.error || `Bmob 请求失败（${response.status}）`;
-    throw new Error(message);
-  }
-
-  return data;
-}
-
 function syncFormButton() {
   refs.submitButton.disabled = state.isSubmitting || !state.userId;
   refs.submitButton.textContent = state.isSubmitting ? "提交中..." : "提交到明日歌单";
@@ -511,7 +477,7 @@ function updateFormHint(message, isError) {
   refs.formHint.style.color = isError ? "var(--danger)" : "var(--muted)";
 }
 
-function handleBmobError(message, error) {
+function handleSupabaseError(message, error) {
   console.error(message, error);
   refs.authStatus.textContent = "连接异常";
   refs.authStatus.style.color = "var(--danger)";
@@ -519,11 +485,16 @@ function handleBmobError(message, error) {
 }
 
 function resolveErrorMessage(error) {
-  if (error instanceof Error && error.message) {
-    return error.message;
+  if (error && typeof error === "object") {
+    if ("message" in error && typeof error.message === "string") {
+      return error.message;
+    }
+    if ("error_description" in error && typeof error.error_description === "string") {
+      return error.error_description;
+    }
   }
 
-  return "请检查网络、表名或密钥配置";
+  return "请检查表结构、权限策略或网络";
 }
 
 function getOrCreateVisitorId() {
@@ -541,10 +512,6 @@ function getOrCreateVisitorId() {
 
   localStorage.setItem(storageKey, nextId);
   return nextId;
-}
-
-function trimTrailingSlash(value) {
-  return value.endsWith("/") ? value.slice(0, -1) : value;
 }
 
 function normalizeText(value) {
