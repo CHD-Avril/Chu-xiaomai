@@ -1,6 +1,6 @@
 export const bmobConfig = {
   applicationId: "328e672f6062dcca76532237f04a4e5e",
-  restApiKey: "04a2b60a36ef6045729937e1539f4c04",
+  restApiKey: "a1c5b16a11736868d02618afabe92741",
   baseUrl: "https://open2.bmobapp.com/1",
   tables: {
     songs: "songs",

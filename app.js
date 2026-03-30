@@ -104,7 +104,7 @@ async function syncAllData(options = {}) {
     render();
   } catch (error) {
     if (!options.silent) {
-      handleBmobError("数据同步失败，请稍后重试。", error);
+      handleBmobError(`数据同步失败：${resolveErrorMessage(error)}`, error);
     } else {
       console.error("静默同步失败", error);
     }
@@ -199,7 +199,7 @@ async function handleSongSubmit(event) {
     updateFormHint("投稿成功，这首歌已经进入明日歌单池。", false);
     await syncAllData();
   } catch (error) {
-    handleBmobError("投稿失败，请检查 Bmob 配置或网络。", error);
+    handleBmobError(`投稿失败：${resolveErrorMessage(error)}`, error);
   } finally {
     state.isSubmitting = false;
     syncFormButton();
@@ -231,7 +231,7 @@ async function handleSongListClick(event) {
 
     await syncAllData({ silent: true });
   } catch (error) {
-    handleBmobError("点赞操作失败，请稍后再试。", error);
+    handleBmobError(`点赞操作失败：${resolveErrorMessage(error)}`, error);
   } finally {
     state.likingSongId = "";
     render();
@@ -516,6 +516,14 @@ function handleBmobError(message, error) {
   refs.authStatus.textContent = "连接异常";
   refs.authStatus.style.color = "var(--danger)";
   updateFormHint(message, true);
+}
+
+function resolveErrorMessage(error) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "请检查网络、表名或密钥配置";
 }
 
 function getOrCreateVisitorId() {
