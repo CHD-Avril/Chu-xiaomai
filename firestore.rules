@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    match /songs/{songId} {
+      allow read: if true;
+
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly([
+          'title',
+          'artist',
+          'titleLower',
+          'artistLower',
+          'playlistDate',
+          'likesCount',
+          'createdBy',
+          'createdAt'
+        ])
+        && request.resource.data.title is string
+        && request.resource.data.artist is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.artist.size() > 0
+        && request.resource.data.likesCount == 0
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount'])
+        && request.resource.data.likesCount is int
+        && request.resource.data.likesCount >= 0
+        && (
+          request.resource.data.likesCount == resource.data.likesCount + 1
+          || (
+            resource.data.likesCount > 0
+            && request.resource.data.likesCount == resource.data.likesCount - 1
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    match /songLikes/{likeId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly(['songId', 'userId', 'playlistDate', 'createdAt'])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.songId is string
+        && request.resource.data.playlistDate is string;
+
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow update: if false;
+    }
+  }
+}

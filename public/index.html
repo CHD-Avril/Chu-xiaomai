@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>广播台明日歌单征集</title>
+    <meta
+      name="description"
+      content="面向校园广播台的明日歌单征集页面，支持投稿、点赞、搜索、排序与分页。"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <div class="hero-glow hero-glow-left"></div>
+      <div class="hero-glow hero-glow-right"></div>
+
+      <header class="hero card">
+        <div class="hero-copy">
+          <p class="eyebrow">Campus Radio Playlist</p>
+          <h1>广播台明日歌单征集</h1>
+          <p class="hero-text">
+            每天在这里投稿下一天想听的歌，也可以为喜欢的歌曲点赞。默认按点赞数排序，翻页、搜索和按时间查看都可以。
+          </p>
+          <div class="hero-meta">
+            <span class="pill pill-primary">当前征集</span>
+            <span class="pill" id="targetDateLabel">载入中...</span>
+            <span class="pill">一台设备 / 浏览器一票</span>
+          </div>
+        </div>
+
+        <div class="hero-stats">
+          <div class="stat-card">
+            <span class="stat-label">歌曲总数</span>
+            <strong class="stat-value" id="songCount">0</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">总点赞数</span>
+            <strong class="stat-value" id="likeCount">0</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">当前状态</span>
+            <strong class="stat-value stat-status" id="authStatus">准备连接</strong>
+          </div>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="card form-panel">
+          <div class="section-head">
+            <div>
+              <p class="section-tag">Submit</p>
+              <h2>投稿一首歌</h2>
+            </div>
+            <p class="section-note">请填写正确歌名和作者，提交后会立刻出现在明日歌单池中。</p>
+          </div>
+
+          <form id="songForm" class="song-form">
+            <label class="field">
+              <span>歌曲名字</span>
+              <input
+                id="songTitle"
+                name="songTitle"
+                type="text"
+                maxlength="80"
+                placeholder="例如：晴天"
+                required
+              />
+            </label>
+
+            <label class="field">
+              <span>作者</span>
+              <input
+                id="artistName"
+                name="artistName"
+                type="text"
+                maxlength="80"
+                placeholder="例如：周杰伦"
+                required
+              />
+            </label>
+
+            <button class="primary-button" id="submitButton" type="submit">
+              提交到明日歌单
+            </button>
+          </form>
+
+          <p class="form-hint" id="formHint">
+            投稿后全站实时同步；如果同一首歌已经有人投过，会提醒你避免重复提交。
+          </p>
+        </section>
+
+        <section class="card list-panel">
+          <div class="section-head list-head">
+            <div>
+              <p class="section-tag">Vote & Search</p>
+              <h2>歌单池</h2>
+            </div>
+            <p class="section-note">默认按点赞数排序，也可以切换为最新投稿。</p>
+          </div>
+
+          <div class="controls">
+            <label class="field search-field">
+              <span>搜索</span>
+              <input
+                id="searchInput"
+                type="search"
+                maxlength="60"
+                placeholder="搜索歌名或作者"
+              />
+            </label>
+
+            <label class="field sort-field">
+              <span>排序</span>
+              <select id="sortSelect">
+                <option value="likes">点赞数优先</option>
+                <option value="time">最新投稿优先</option>
+              </select>
+            </label>
+          </div>
+
+          <div id="firebaseNotice" class="notice hidden">
+            <strong>还没有填写 Bmob 配置。</strong>
+            请先打开 <code>bmob-config.js</code>，填入你的项目参数后再刷新页面。
+          </div>
+
+          <div id="songsList" class="songs-list" aria-live="polite"></div>
+
+          <div class="pagination" id="pagination"></div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
