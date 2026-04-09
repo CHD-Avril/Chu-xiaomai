@@ -62,11 +62,11 @@ render();
 
 if (!hasValidSupabaseConfig()) {
   refs.firebaseNotice.classList.remove("hidden");
-  refs.authStatus.textContent = "等待配置";
+  refs.authStatus.textContent = "连接失败";
   refs.authStatus.style.color = "var(--danger)";
   refs.songsList.innerHTML = createEmptyState(
-    "还没有连接 Supabase",
-    "先填好 supabase-config.js 里的项目参数，再刷新页面，就可以开始投稿和点赞了。"
+    "数据库连接异常",
+    "请检查网络连接后刷新页面重试。"
   );
   syncFormButton();
 } else {
@@ -123,7 +123,10 @@ async function bootSupabase() {
     refs.authStatus.textContent = "已连接";
     refs.authStatus.style.color = "var(--green)";
   } catch (error) {
-    handleSupabaseError(`Supabase 初始化失败：${resolveErrorMessage(error)}`, error);
+    console.error("数据库连接失败:", error);
+    refs.authStatus.textContent = "连接失败";
+    refs.authStatus.style.color = "var(--danger)";
+    updateFormHint("数据库连接失败，请刷新页面重试。", true);
   }
 }
 
@@ -226,7 +229,8 @@ async function handleSongSubmit(event) {
     updateFormHint("投稿成功，这首歌已经进入明日歌单池。", false);
     await syncAllData();
   } catch (error) {
-    handleSupabaseError(`投稿失败：${resolveErrorMessage(error)}`, error);
+    console.error("投稿失败:", error);
+    updateFormHint("投稿失败，请检查网络后重试。", true);
   } finally {
     state.isSubmitting = false;
     syncFormButton();
@@ -258,7 +262,8 @@ async function handleSongListClick(event) {
 
     await syncAllData();
   } catch (error) {
-    handleSupabaseError(`点赞操作失败：${resolveErrorMessage(error)}`, error);
+    console.error("点赞操作失败:", error);
+    alert("点赞失败，请检查网络后重试");
   } finally {
     state.likingSongId = "";
     render();
@@ -514,26 +519,6 @@ function syncFormButton() {
 function updateFormHint(message, isError) {
   refs.formHint.textContent = message;
   refs.formHint.style.color = isError ? "var(--danger)" : "var(--muted)";
-}
-
-function handleSupabaseError(message, error) {
-  console.error(message, error);
-  refs.authStatus.textContent = "连接异常";
-  refs.authStatus.style.color = "var(--danger)";
-  updateFormHint(message, true);
-}
-
-function resolveErrorMessage(error) {
-  if (error && typeof error === "object") {
-    if ("message" in error && typeof error.message === "string") {
-      return error.message;
-    }
-    if ("error_description" in error && typeof error.error_description === "string") {
-      return error.error_description;
-    }
-  }
-
-  return "请检查表结构、权限策略或网络";
 }
 
 function getOrCreateVisitorId() {
