@@ -55,21 +55,33 @@ const supabase = hasValidSupabaseConfig()
   ? createClient(supabaseConfig.url, supabaseConfig.anonKey)
   : null;
 
+console.log("========== Supabase 配置信息 ==========");
+console.log("1. 配置有效性:", hasValidSupabaseConfig());
+console.log("2. 项目 URL:", supabaseConfig?.url || "未配置");
+console.log("3. Anon Key 前缀:", supabaseConfig?.anonKey ? supabaseConfig.anonKey.substring(0, 30) + "..." : "未配置");
+console.log("4. Supabase 客户端:", supabase ? "已创建" : "未创建");
+console.log("========================================");
+
 refs.targetDateLabel.textContent = formatDateLabel(TARGET_DATE);
 
 bindEvents();
 render();
 
 if (!hasValidSupabaseConfig()) {
+  console.error("❌ 错误: Supabase 配置无效");
+  console.error("请检查 public/supabase-config.js 文件");
   refs.firebaseNotice.classList.remove("hidden");
-  refs.authStatus.textContent = "连接失败";
+  refs.authStatus.textContent = "配置无效";
   refs.authStatus.style.color = "var(--danger)";
   refs.songsList.innerHTML = createEmptyState(
-    "数据库连接异常",
-    "请检查网络连接后刷新页面重试。"
+    "数据库配置无效",
+    "请检查配置文件后刷新页面。"
   );
   syncFormButton();
 } else {
+  console.log("✅ 配置有效，开始连接数据库...");
+  refs.authStatus.textContent = "连接中...";
+  refs.authStatus.style.color = "var(--blue)";
   bootSupabase();
 }
 
@@ -105,43 +117,73 @@ function bindEvents() {
 }
 
 async function bootSupabase() {
+  console.log("\n========== 数据库连接调试 ==========");
   try {
+    console.log("步骤 1: 生成用户 ID...");
     state.userId = getOrCreateVisitorId();
+    console.log("   用户 ID:", state.userId);
+    
+    console.log("步骤 2: 设置后端状态...");
     state.backendReady = true;
     refs.authStatus.textContent = "同步中";
     refs.authStatus.style.color = "var(--blue-deep)";
     syncFormButton();
 
+    console.log("步骤 3: 同步歌曲和点赞数据...");
     await syncAllData();
+    console.log("   歌曲数量:", state.songs.length);
+    console.log("   点赞数量:", state.likedSongIds.size);
     
-    // 获取公告
+    console.log("步骤 4: 获取公告...");
     await fetchAnnouncement();
+    console.log("   当前公告:", state.currentAnnouncement ? state.currentAnnouncement.title : "无");
     
-    // 检查是否需要显示公告
+    console.log("步骤 5: 检查公告显示...");
     checkAndShowAnnouncement();
 
     refs.authStatus.textContent = "已连接";
     refs.authStatus.style.color = "var(--green)";
+    console.log("\n✅ 数据库连接成功！");
+    console.log("========================================\n");
   } catch (error) {
-    console.error("数据库连接失败:", error);
+    console.error("\n❌ 数据库连接失败！");
+    console.error("错误类型:", error.name || "Unknown");
+    console.error("错误消息:", error.message);
+    console.error("错误详情:", error);
+    console.error("========================================\n");
+    
     refs.authStatus.textContent = "连接失败";
     refs.authStatus.style.color = "var(--danger)";
-    updateFormHint("数据库连接失败，请刷新页面重试。", true);
+    updateFormHint("数据库连接失败，请查看控制台 (F12) 获取详细信息。", true);
+    
+    // 在页面上显示错误信息
+    refs.songsList.innerHTML = createEmptyState(
+      "数据库连接失败",
+      `错误: ${error.message || "未知错误"}\n\n请:\n1. 按 F12 打开控制台查看详细错误\n2. 检查网络连接\n3. 确认 Supabase 项目正常运行\n4. 刷新页面重试`
+    );
   }
 }
 
 async function syncAllData() {
   if (!state.backendReady) {
+    console.warn("后端未就绪，跳过数据同步");
     return;
   }
 
+  console.log("   3.1 获取歌曲列表...");
   const [songs, likes] = await Promise.all([fetchSongs(), fetchLikes()]);
+  console.log("   3.2 获取点赞列表...");
+  
   state.songs = songs;
   state.likedSongIds = new Set(likes.map((item) => item.song_id));
+  
+  console.log("   3.3 更新界面...");
   render();
+  console.log("   3.4 数据同步完成");
 }
 
 async function fetchSongs() {
+  console.log("      查询歌曲表...");
   const { data, error } = await supabase
     .from(supabaseConfig.tables.songs)
     .select("*")
@@ -149,8 +191,11 @@ async function fetchSongs() {
     .limit(500);
 
   if (error) {
+    console.error("      ❌ 查询歌曲失败:", error);
     throw error;
   }
+  
+  console.log("      ✅ 查询成功，获取到", data?.length || 0, "首歌曲");
 
   return (data ?? []).map((song) => ({
     id: song.id,
@@ -165,6 +210,7 @@ async function fetchSongs() {
 }
 
 async function fetchLikes() {
+  console.log("      查询点赞表...");
   const { data, error } = await supabase
     .from(supabaseConfig.tables.likes)
     .select("song_id")
@@ -173,9 +219,11 @@ async function fetchLikes() {
     .limit(500);
 
   if (error) {
+    console.error("      ❌ 查询点赞失败:", error);
     throw error;
   }
-
+  
+  console.log("      ✅ 查询成功，获取到", data?.length || 0, "个点赞");
   return data ?? [];
 }
 
@@ -699,6 +747,7 @@ function handleAdminClose() {
 
 async function fetchAnnouncement() {
   try {
+    console.log("      查询公告表...");
     const { data, error } = await supabase
       .from(supabaseConfig.tables.announcements)
       .select("*")
@@ -707,17 +756,20 @@ async function fetchAnnouncement() {
       .limit(1);
     
     if (error) {
-      console.error("获取公告失败:", error);
+      console.error("      ❌ 查询公告失败:", error);
+      console.warn("      公告表可能不存在或未创建");
       return;
     }
     
     if (data && data.length > 0) {
       state.currentAnnouncement = data[0];
+      console.log("      ✅ 获取到公告:", data[0].title);
     } else {
       state.currentAnnouncement = null;
+      console.log("      ℹ️ 没有启用的公告");
     }
   } catch (error) {
-    console.error("获取公告异常:", error);
+    console.error("      ❌ 获取公告异常:", error);
   }
 }
 
