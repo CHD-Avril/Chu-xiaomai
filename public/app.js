@@ -1,5 +1,5 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
-import { supabaseConfig, hasValidSupabaseConfig } from "./supabase-config.js";
+import { supabaseConfig, hasValidSupabaseConfig, adminAccounts } from "./supabase-config.js";
 
 const SONGS_PER_PAGE = 6;
 const TARGET_DATE = getTomorrowDateKey();
@@ -605,27 +605,104 @@ function handleAdminToggle() {
     return;
   }
   
-  // 验证管理员密码
-  const password = prompt("请输入管理员密码：");
-  if (!password) {
-    return;
-  }
+  // 显示登录表单
+  showAdminLoginForm();
+}
+
+function showAdminLoginForm() {
+  // 创建登录对话框
+  const overlay = document.createElement('div');
+  overlay.className = 'admin-login-overlay';
+  overlay.innerHTML = `
+    <div class="admin-login-modal">
+      <div class="admin-login-header">
+        <h3>管理员登录</h3>
+        <button class="admin-login-close" type="button">&times;</button>
+      </div>
+      <form class="admin-login-form">
+        <label class="field">
+          <span>管理员账号</span>
+          <input
+            type="text"
+            class="admin-username-input"
+            placeholder="请输入管理员账号"
+            required
+            autocomplete="username"
+          />
+        </label>
+        <label class="field">
+          <span>密码</span>
+          <input
+            type="password"
+            class="admin-password-input"
+            placeholder="请输入密码"
+            required
+            autocomplete="current-password"
+          />
+        </label>
+        <button type="submit" class="primary-button admin-login-btn">登录</button>
+        <p class="admin-login-hint"></p>
+      </form>
+    </div>
+  `;
   
-  // 简单的密码验证（实际项目中应该使用更安全的认证方式）
-  const adminPassword = "admin123"; // 默认密码，可以修改
+  document.body.appendChild(overlay);
   
-  if (password === adminPassword) {
-    state.isAdmin = true;
-    state.isAdminAuthenticated = true;
-    refs.adminPanel.classList.remove("hidden");
-    refs.adminToggleBtn.textContent = "管理已开启";
-    refs.adminToggleBtn.style.background = "linear-gradient(135deg, var(--green), #2ea043)";
+  // 绑定事件
+  const closeBtn = overlay.querySelector('.admin-login-close');
+  const form = overlay.querySelector('.admin-login-form');
+  const usernameInput = overlay.querySelector('.admin-username-input');
+  const passwordInput = overlay.querySelector('.admin-password-input');
+  const hint = overlay.querySelector('.admin-login-hint');
+  
+  closeBtn.addEventListener('click', () => {
+    document.body.removeChild(overlay);
+  });
+  
+  overlay.addEventListener('click', (event) => {
+    if (event.target === overlay) {
+      document.body.removeChild(overlay);
+    }
+  });
+  
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
     
-    // 加载当前公告
-    loadCurrentAnnouncementToForm();
-  } else {
-    alert("密码错误！");
-  }
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value;
+    
+    if (!username || !password) {
+      hint.textContent = '请填写账号和密码';
+      hint.style.color = 'var(--danger)';
+      return;
+    }
+    
+    // 验证管理员账户
+    const adminAccount = adminAccounts.find(
+      account => account.username === username && account.password === password
+    );
+    
+    if (adminAccount) {
+      // 登录成功
+      document.body.removeChild(overlay);
+      state.isAdmin = true;
+      state.isAdminAuthenticated = true;
+      state.adminUsername = username;
+      refs.adminPanel.classList.remove('hidden');
+      refs.adminToggleBtn.textContent = '管理已开启';
+      refs.adminToggleBtn.style.background = 'linear-gradient(135deg, var(--green), #2ea043)';
+      
+      // 加载当前公告
+      loadCurrentAnnouncementToForm();
+    } else {
+      hint.textContent = '账号或密码错误';
+      hint.style.color = 'var(--danger)';
+      passwordInput.value = '';
+    }
+  });
+  
+  // 自动聚焦到用户名输入框
+  usernameInput.focus();
 }
 
 function handleAdminClose() {

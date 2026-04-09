@@ -9,6 +9,14 @@ export const supabaseConfig = {
   },
 };
 
+// 管理员账户配置（客户端验证）
+export const adminAccounts = [
+  {
+    username: "changdaxiaomaijun",
+    password: "gbt666",
+  },
+];
+
 export function hasValidSupabaseConfig() {
   return (
     typeof supabaseConfig.url === "string" &&

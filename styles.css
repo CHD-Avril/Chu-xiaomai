@@ -364,6 +364,83 @@ button {
   padding: 0 24px;
 }
 
+/* 管理员登录弹窗样式 */
+.admin-login-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  background: rgba(22, 49, 79, 0.6);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fade-in 0.3s ease;
+}
+
+.admin-login-modal {
+  background: var(--surface-strong);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 32px 64px rgba(26, 115, 232, 0.24);
+  max-width: 450px;
+  width: 100%;
+  animation: slide-up 0.3s ease;
+}
+
+.admin-login-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 28px;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-login-header h3 {
+  margin: 0;
+  font-size: 1.4rem;
+  color: var(--text);
+}
+
+.admin-login-close {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.admin-login-close:hover {
+  background: rgba(26, 115, 232, 0.08);
+  color: var(--text);
+}
+
+.admin-login-form {
+  padding: 28px;
+  display: grid;
+  gap: 16px;
+}
+
+.admin-login-btn {
+  min-height: 52px;
+  margin-top: 8px;
+}
+
+.admin-login-hint {
+  margin: 0;
+  font-size: 0.92rem;
+  text-align: center;
+  min-height: 20px;
+}
+
 @keyframes fade-in {
   from {
     opacity: 0;
@@ -728,6 +805,18 @@ button {
   
   .announcement-modal-footer {
     padding: 16px 20px;
+  }
+  
+  .admin-login-modal {
+    max-width: 95%;
+  }
+  
+  .admin-login-header {
+    padding: 18px 20px;
+  }
+  
+  .admin-login-form {
+    padding: 20px;
   }
 }
 
