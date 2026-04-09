@@ -131,20 +131,41 @@ function bindEvents() {
   refs.songsList.addEventListener("click", handleSongListClick);
   refs.pagination.addEventListener("click", handlePaginationClick);
   
-  // 管理员相关事件
-  refs.adminToggleBtn.addEventListener("click", handleAdminToggle);
-  refs.adminCloseBtn.addEventListener("click", handleAdminClose);
-  refs.announcementForm.addEventListener("submit", handleAnnouncementSubmit);
-  refs.disableAnnouncementBtn.addEventListener("click", handleDisableAnnouncement);
-  refs.announcementCloseBtn.addEventListener("click", closeAnnouncementModal);
-  refs.announcementAckBtn.addEventListener("click", closeAnnouncementModal);
+  // 管理员相关事件（检查元素是否存在）
+  if (refs.adminToggleBtn) {
+    refs.adminToggleBtn.addEventListener("click", handleAdminToggle);
+  } else {
+    console.warn("⚠️ adminToggleBtn 元素未找到");
+  }
+  
+  if (refs.adminCloseBtn) {
+    refs.adminCloseBtn.addEventListener("click", handleAdminClose);
+  }
+  
+  if (refs.announcementForm) {
+    refs.announcementForm.addEventListener("submit", handleAnnouncementSubmit);
+  }
+  
+  if (refs.disableAnnouncementBtn) {
+    refs.disableAnnouncementBtn.addEventListener("click", handleDisableAnnouncement);
+  }
+  
+  if (refs.announcementCloseBtn) {
+    refs.announcementCloseBtn.addEventListener("click", closeAnnouncementModal);
+  }
+  
+  if (refs.announcementAckBtn) {
+    refs.announcementAckBtn.addEventListener("click", closeAnnouncementModal);
+  }
   
   // 点击模态框背景关闭
-  refs.announcementModal.addEventListener("click", (event) => {
-    if (event.target === refs.announcementModal) {
-      closeAnnouncementModal();
-    }
-  });
+  if (refs.announcementModal) {
+    refs.announcementModal.addEventListener("click", (event) => {
+      if (event.target === refs.announcementModal) {
+        closeAnnouncementModal();
+      }
+    });
+  }
 }
 
 async function bootSupabase() {
