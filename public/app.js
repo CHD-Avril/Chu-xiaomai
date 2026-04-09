@@ -80,9 +80,40 @@ if (!hasValidSupabaseConfig()) {
   syncFormButton();
 } else {
   console.log("✅ 配置有效，开始连接数据库...");
-  refs.authStatus.textContent = "连接中...";
-  refs.authStatus.style.color = "var(--blue)";
-  bootSupabase();
+  console.log("\n🔍 测试 Supabase 连接...");
+  
+  // 先测试连接
+  supabase
+    .from(supabaseConfig.tables.songs)
+    .select("count", { count: 'exact', head: true })
+    .then(({ data, error }) => {
+      if (error) {
+        console.error("❌ 连接测试失败:", error);
+        console.error("错误详情:", error.message);
+        console.error("\n可能原因：");
+        console.error("1. 数据库表未创建 - 请执行 supabase-rls-setup.sql");
+        console.error("2. 网络连接问题 - 请检查网络");
+        console.error("3. Supabase 服务停机 - 请等待服务恢复");
+        console.error("4. 权限配置错误 - 请检查 RLS 策略");
+        refs.authStatus.textContent = "连接失败";
+        refs.authStatus.style.color = "var(--danger)";
+        refs.songsList.innerHTML = createEmptyState(
+          "数据库连接失败",
+          `错误: ${error.message}\n\n请:\n1. 按 F12 查看控制台详细错误\n2. 确认已执行 supabase-rls-setup.sql\n3. 检查网络连接\n4. 刷新页面重试`
+        );
+      } else {
+        console.log("✅ 连接测试成功！");
+        console.log("开始加载数据...\n");
+        refs.authStatus.textContent = "连接中...";
+        refs.authStatus.style.color = "var(--blue)";
+        bootSupabase();
+      }
+    })
+    .catch((err) => {
+      console.error("❌ 连接测试异常:", err);
+      refs.authStatus.textContent = "连接异常";
+      refs.authStatus.style.color = "var(--danger)";
+    });
 }
 
 function bindEvents() {
@@ -130,7 +161,15 @@ async function bootSupabase() {
     syncFormButton();
 
     console.log("步骤 3: 同步歌曲和点赞数据...");
-    await syncAllData();
+    console.log("   开始请求数据，请稍候...");
+    
+    // 添加超时检测
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("请求超时（10秒）- 请检查网络连接或 Supabase 服务状态")), 10000);
+    });
+    
+    await Promise.race([syncAllData(), timeoutPromise]);
+    
     console.log("   歌曲数量:", state.songs.length);
     console.log("   点赞数量:", state.likedSongIds.size);
     
