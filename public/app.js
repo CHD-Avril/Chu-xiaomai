@@ -62,6 +62,17 @@ console.log("3. Anon Key 前缀:", supabaseConfig?.anonKey ? supabaseConfig.anon
 console.log("4. Supabase 客户端:", supabase ? "已创建" : "未创建");
 console.log("========================================");
 
+// 检查所有 DOM 元素
+console.log("\n🔍 检查 DOM 元素:");
+Object.keys(refs).forEach(key => {
+  if (refs[key] === null) {
+    console.error(`❌ ${key}: null (未找到)`);
+  } else {
+    console.log(`✅ ${key}: 找到`);
+  }
+});
+console.log("");
+
 refs.targetDateLabel.textContent = formatDateLabel(TARGET_DATE);
 
 bindEvents();
