@@ -5,6 +5,7 @@ export const supabaseConfig = {
   tables: {
     songs: "songs",
     likes: "song_likes",
+    announcements: "announcements",
   },
 };
 

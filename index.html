@@ -33,6 +33,7 @@
             <span class="pill pill-primary">当前征集</span>
             <span class="pill" id="targetDateLabel">载入中...</span>
             <span class="pill">一台设备 / 浏览器一票</span>
+            <button class="pill pill-admin" id="adminToggleBtn" type="button">管理员模式</button>
           </div>
         </div>
 
@@ -53,6 +54,61 @@
       </header>
 
       <main class="layout">
+        <!-- 管理员面板 -->
+        <section class="card admin-panel hidden" id="adminPanel">
+          <div class="section-head">
+            <div>
+              <p class="section-tag">Admin</p>
+              <h2>管理员控制台</h2>
+            </div>
+            <button class="primary-button admin-close-btn" id="adminCloseBtn" type="button">退出管理</button>
+          </div>
+
+          <div class="admin-section">
+            <h3>设置公告</h3>
+            <p class="section-note">公告会在用户首次访问时弹出显示</p>
+            
+            <form id="announcementForm" class="announcement-form">
+              <label class="field">
+                <span>公告标题</span>
+                <input
+                  id="announcementTitle"
+                  name="announcementTitle"
+                  type="text"
+                  maxlength="100"
+                  placeholder="例如：每日播放规则"
+                  required
+                />
+              </label>
+
+              <label class="field">
+                <span>公告内容</span>
+                <textarea
+                  id="announcementContent"
+                  name="announcementContent"
+                  maxlength="1000"
+                  placeholder="例如：\n1. 每天最多播放两首外语歌\n2. 禁止播放的歌曲类型：...\n3. 其他规则..."
+                  required
+                  rows="6"
+                ></textarea>
+              </label>
+
+              <div class="admin-actions">
+                <button class="primary-button" id="saveAnnouncementBtn" type="submit">
+                  保存公告
+                </button>
+                <button class="primary-button secondary-btn" id="disableAnnouncementBtn" type="button">
+                  禁用公告
+                </button>
+              </div>
+            </form>
+
+            <p class="form-hint" id="announcementHint">
+              保存后，所有用户访问页面时会看到此公告弹窗。
+            </p>
+          </div>
+        </section>
+
         <section class="card form-panel">
           <div class="section-head">
             <div>
@@ -136,6 +192,21 @@
           <div class="pagination" id="pagination"></div>
         </section>
       </main>
+    </div>
+
+    <!-- 公告弹窗 -->
+    <div class="announcement-modal-overlay hidden" id="announcementModal">
+      <div class="announcement-modal">
+        <div class="announcement-modal-header">
+          <h3 id="announcementModalTitle">公告</h3>
+          <button class="announcement-close-btn" id="announcementCloseBtn" type="button">&times;</button>
+        </div>
+        <div class="announcement-modal-body" id="announcementModalContent">
+        </div>
+        <div class="announcement-modal-footer">
+          <button class="primary-button" id="announcementAckBtn" type="button">我知道了</button>
+        </div>
+      </div>
     </div>
   </body>
 </html>

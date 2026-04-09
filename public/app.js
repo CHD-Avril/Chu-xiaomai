@@ -14,6 +14,10 @@ const state = {
   isSubmitting: false,
   likingSongId: "",
   backendReady: false,
+  isAdmin: false,
+  isAdminAuthenticated: false,
+  currentAnnouncement: null,
+  isSavingAnnouncement: false,
 };
 
 const refs = {
@@ -31,6 +35,20 @@ const refs = {
   sortSelect: document.querySelector("#sortSelect"),
   songsList: document.querySelector("#songsList"),
   pagination: document.querySelector("#pagination"),
+  adminToggleBtn: document.querySelector("#adminToggleBtn"),
+  adminPanel: document.querySelector("#adminPanel"),
+  adminCloseBtn: document.querySelector("#adminCloseBtn"),
+  announcementForm: document.querySelector("#announcementForm"),
+  announcementTitle: document.querySelector("#announcementTitle"),
+  announcementContent: document.querySelector("#announcementContent"),
+  saveAnnouncementBtn: document.querySelector("#saveAnnouncementBtn"),
+  disableAnnouncementBtn: document.querySelector("#disableAnnouncementBtn"),
+  announcementHint: document.querySelector("#announcementHint"),
+  announcementModal: document.querySelector("#announcementModal"),
+  announcementModalTitle: document.querySelector("#announcementModalTitle"),
+  announcementModalContent: document.querySelector("#announcementModalContent"),
+  announcementCloseBtn: document.querySelector("#announcementCloseBtn"),
+  announcementAckBtn: document.querySelector("#announcementAckBtn"),
 };
 
 const supabase = hasValidSupabaseConfig()
@@ -69,6 +87,21 @@ function bindEvents() {
   });
   refs.songsList.addEventListener("click", handleSongListClick);
   refs.pagination.addEventListener("click", handlePaginationClick);
+  
+  // 管理员相关事件
+  refs.adminToggleBtn.addEventListener("click", handleAdminToggle);
+  refs.adminCloseBtn.addEventListener("click", handleAdminClose);
+  refs.announcementForm.addEventListener("submit", handleAnnouncementSubmit);
+  refs.disableAnnouncementBtn.addEventListener("click", handleDisableAnnouncement);
+  refs.announcementCloseBtn.addEventListener("click", closeAnnouncementModal);
+  refs.announcementAckBtn.addEventListener("click", closeAnnouncementModal);
+  
+  // 点击模态框背景关闭
+  refs.announcementModal.addEventListener("click", (event) => {
+    if (event.target === refs.announcementModal) {
+      closeAnnouncementModal();
+    }
+  });
 }
 
 async function bootSupabase() {
@@ -80,6 +113,12 @@ async function bootSupabase() {
     syncFormButton();
 
     await syncAllData();
+    
+    // 获取公告
+    await fetchAnnouncement();
+    
+    // 检查是否需要显示公告
+    checkAndShowAnnouncement();
 
     refs.authStatus.textContent = "已连接";
     refs.authStatus.style.color = "var(--green)";
@@ -555,4 +594,192 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+// ==================== 管理员功能 ====================
+
+function handleAdminToggle() {
+  if (state.isAdmin) {
+    // 已经是管理员模式，关闭
+    handleAdminClose();
+    return;
+  }
+  
+  // 验证管理员密码
+  const password = prompt("请输入管理员密码：");
+  if (!password) {
+    return;
+  }
+  
+  // 简单的密码验证（实际项目中应该使用更安全的认证方式）
+  const adminPassword = "admin123"; // 默认密码，可以修改
+  
+  if (password === adminPassword) {
+    state.isAdmin = true;
+    state.isAdminAuthenticated = true;
+    refs.adminPanel.classList.remove("hidden");
+    refs.adminToggleBtn.textContent = "管理已开启";
+    refs.adminToggleBtn.style.background = "linear-gradient(135deg, var(--green), #2ea043)";
+    
+    // 加载当前公告
+    loadCurrentAnnouncementToForm();
+  } else {
+    alert("密码错误！");
+  }
+}
+
+function handleAdminClose() {
+  state.isAdmin = false;
+  refs.adminPanel.classList.add("hidden");
+  refs.adminToggleBtn.textContent = "管理员模式";
+  refs.adminToggleBtn.style.background = "";
+}
+
+async function fetchAnnouncement() {
+  try {
+    const { data, error } = await supabase
+      .from(supabaseConfig.tables.announcements)
+      .select("*")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    
+    if (error) {
+      console.error("获取公告失败:", error);
+      return;
+    }
+    
+    if (data && data.length > 0) {
+      state.currentAnnouncement = data[0];
+    } else {
+      state.currentAnnouncement = null;
+    }
+  } catch (error) {
+    console.error("获取公告异常:", error);
+  }
+}
+
+function checkAndShowAnnouncement() {
+  // 检查用户是否已经看过公告
+  const hasSeenAnnouncement = localStorage.getItem("chu_xiaomai_seen_announcement");
+  
+  if (state.currentAnnouncement && !hasSeenAnnouncement) {
+    showAnnouncementModal(state.currentAnnouncement);
+  }
+}
+
+function showAnnouncementModal(announcement) {
+  refs.announcementModalTitle.textContent = announcement.title || "公告";
+  refs.announcementModalContent.textContent = announcement.content || "";
+  refs.announcementModal.classList.remove("hidden");
+}
+
+function closeAnnouncementModal() {
+  refs.announcementModal.classList.add("hidden");
+  // 记录用户已看过公告
+  localStorage.setItem("chu_xiaomai_seen_announcement", "true");
+}
+
+function loadCurrentAnnouncementToForm() {
+  if (state.currentAnnouncement) {
+    refs.announcementTitle.value = state.currentAnnouncement.title || "";
+    refs.announcementContent.value = state.currentAnnouncement.content || "";
+  } else {
+    refs.announcementForm.reset();
+  }
+}
+
+async function handleAnnouncementSubmit(event) {
+  event.preventDefault();
+  
+  if (!state.isAdminAuthenticated) {
+    alert("请先进行管理员认证！");
+    return;
+  }
+  
+  const title = refs.announcementTitle.value.trim();
+  const content = refs.announcementContent.value.trim();
+  
+  if (!title || !content) {
+    updateAnnouncementHint("请填写完整的标题和内容", true);
+    return;
+  }
+  
+  state.isSavingAnnouncement = true;
+  refs.saveAnnouncementBtn.disabled = true;
+  refs.saveAnnouncementBtn.textContent = "保存中...";
+  updateAnnouncementHint("正在保存公告...", false);
+  
+  try {
+    // 先禁用所有旧公告
+    await supabase
+      .from(supabaseConfig.tables.announcements)
+      .update({ is_active: false })
+      .eq("is_active", true);
+    
+    // 插入新公告
+    const { error } = await supabase
+      .from(supabaseConfig.tables.announcements)
+      .insert({
+        title,
+        content,
+        is_active: true,
+        created_by: state.userId,
+      });
+    
+    if (error) {
+      throw error;
+    }
+    
+    updateAnnouncementHint("公告保存成功！", false);
+    
+    // 更新本地状态
+    await fetchAnnouncement();
+    
+    // 清空表单
+    refs.announcementForm.reset();
+  } catch (error) {
+    console.error("保存公告失败:", error);
+    updateAnnouncementHint(`保存失败：${resolveErrorMessage(error)}`, true);
+  } finally {
+    state.isSavingAnnouncement = false;
+    refs.saveAnnouncementBtn.disabled = false;
+    refs.saveAnnouncementBtn.textContent = "保存公告";
+  }
+}
+
+async function handleDisableAnnouncement() {
+  if (!state.isAdminAuthenticated) {
+    alert("请先进行管理员认证！");
+    return;
+  }
+  
+  if (!confirm("确定要禁用当前公告吗？用户将不再看到公告弹窗。")) {
+    return;
+  }
+  
+  try {
+    const { error } = await supabase
+      .from(supabaseConfig.tables.announcements)
+      .update({ is_active: false })
+      .eq("is_active", true);
+    
+    if (error) {
+      throw error;
+    }
+    
+    updateAnnouncementHint("公告已禁用", false);
+    
+    // 更新本地状态
+    state.currentAnnouncement = null;
+    refs.announcementForm.reset();
+  } catch (error) {
+    console.error("禁用公告失败:", error);
+    updateAnnouncementHint(`禁用失败：${resolveErrorMessage(error)}`, true);
+  }
+}
+
+function updateAnnouncementHint(message, isError) {
+  refs.announcementHint.textContent = message;
+  refs.announcementHint.style.color = isError ? "var(--danger)" : "var(--muted)";
 }
