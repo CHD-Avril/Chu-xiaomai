@@ -542,10 +542,13 @@ button {
 
 .songs-list {
   display: grid;
-  gap: 8px;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid rgba(26, 115, 232, 0.18);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.82);
 }
 
-.song-card,
 .empty-state {
   border-radius: var(--radius-md);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 250, 255, 0.92));
@@ -554,31 +557,62 @@ button {
 
 .song-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
-  min-height: 46px;
-  padding: 8px 10px 8px 14px;
+  gap: 14px;
+  min-height: 62px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(22, 49, 79, 0.12);
+  background: transparent;
   animation: rise-in 0.24s ease;
 }
 
-.song-line {
+.song-card:last-child {
+  border-bottom: 0;
+}
+
+.song-card:hover {
+  background: rgba(26, 115, 232, 0.06);
+}
+
+.song-rank-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(251, 188, 4, 0.28);
+  color: #6c4a00;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.song-main {
   min-width: 0;
+}
+
+.song-title,
+.song-artist {
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 1rem;
-  line-height: 1.35;
 }
 
 .song-title {
+  color: var(--text);
+  font-size: 1rem;
   font-weight: 800;
+  line-height: 1.35;
 }
 
 .song-artist {
+  margin-top: 3px;
   color: var(--muted);
+  font-size: 0.92rem;
   font-weight: 600;
+  line-height: 1.35;
 }
 
 .like-button {
@@ -588,7 +622,7 @@ button {
   min-width: 86px;
   min-height: 34px;
   padding: 0 12px;
-  border-radius: 14px;
+  border-radius: 999px;
   background: rgba(251, 188, 4, 0.14);
   color: #825900;
   font-size: 1rem;
@@ -602,6 +636,8 @@ button {
 }
 
 .empty-state {
+  border: 0;
+  border-radius: 0;
   text-align: center;
   padding: 36px 18px;
 }
@@ -848,9 +884,15 @@ button {
   }
 
   .song-card {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: 36px minmax(0, 1fr) auto;
     gap: 8px;
-    padding-left: 10px;
+    padding: 10px;
+  }
+
+  .song-rank-dot {
+    width: 30px;
+    height: 30px;
+    font-size: 0.78rem;
   }
 
   .like-button {

@@ -457,7 +457,7 @@ function render() {
     );
   } else {
     refs.songsList.innerHTML = currentSongs
-      .map((song) => createSongCard(song))
+      .map((song, index) => createSongCard(song, startIndex + index + 1))
       .join("");
   }
 
@@ -539,7 +539,7 @@ function sortByTime(firstSong, secondSong) {
   return firstSong.title.localeCompare(secondSong.title, "zh-CN");
 }
 
-function createSongCard(song) {
+function createSongCard(song, rank) {
   const isLiked = state.likedSongIds.has(song.id);
   const isBusy = state.likingSongId === song.id;
   const canLike = canMutateCurrentPeriod();
@@ -551,10 +551,11 @@ function createSongCard(song) {
 
   return `
     <article class="song-card">
-      <p class="song-line" title="${escapeHtml(`${song.title} ${song.artist}`)}">
-        <span class="song-title">${escapeHtml(song.title)}</span>
-        <span class="song-artist">${escapeHtml(song.artist)}</span>
-      </p>
+      <div class="song-rank-dot">${rank}</div>
+      <div class="song-main" title="${escapeHtml(`${song.title} ${song.artist}`)}">
+        <p class="song-title">${escapeHtml(song.title)}</p>
+        <p class="song-artist">${escapeHtml(song.artist)}</p>
+      </div>
       <button
         class="like-button ${isLiked ? "is-liked" : ""}"
         type="button"
