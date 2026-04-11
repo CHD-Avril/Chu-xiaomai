@@ -269,6 +269,55 @@ button {
   gap: 16px;
 }
 
+.submission-period-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin: -8px 0 18px;
+  padding: 12px 14px;
+  border: 1px solid rgba(26, 115, 232, 0.16);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.submission-period-card strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 1rem;
+}
+
+.submission-period-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.period-state-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 68px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(217, 48, 37, 0.1);
+  color: var(--danger);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.submission-period-card.is-active .period-state-chip {
+  background: rgba(30, 142, 62, 0.12);
+  color: var(--green);
+}
+
+.submission-period-card.is-public .period-state-chip {
+  background: rgba(26, 115, 232, 0.1);
+  color: var(--blue-deep);
+}
+
 .field {
   display: grid;
   gap: 10px;
@@ -766,6 +815,10 @@ button {
 
   .section-head {
     display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .submission-period-card {
     grid-template-columns: 1fr;
   }
 

@@ -37,6 +37,10 @@ const refs = {
   form: document.querySelector("#songForm"),
   submitButton: document.querySelector("#submitButton"),
   formHint: document.querySelector("#formHint"),
+  submissionPeriodCard: document.querySelector("#submissionPeriodCard"),
+  submissionPeriodState: document.querySelector("#submissionPeriodState"),
+  submissionPeriodTitle: document.querySelector("#submissionPeriodTitle"),
+  submissionPeriodTime: document.querySelector("#submissionPeriodTime"),
   titleInput: document.querySelector("#songTitle"),
   artistInput: document.querySelector("#artistName"),
   searchInput: document.querySelector("#searchInput"),
@@ -469,19 +473,31 @@ function renderPeriodStatus() {
     refs.targetDateLabel.textContent = "未设置征集期";
     refs.authStatus.textContent = "未开放";
     refs.authStatus.style.color = "var(--danger)";
+    refs.submissionPeriodCard.classList.remove("is-active", "is-public");
+    refs.submissionPeriodState.textContent = "未开放";
+    refs.submissionPeriodTitle.textContent = "暂未设置征集期";
+    refs.submissionPeriodTime.textContent = "等待管理员设置本次歌单征集时间。";
     updateFormHint("管理员还没有设置当前征集期，暂时不能投稿或点赞。", true);
     return;
   }
 
   refs.targetDateLabel.textContent = `${state.currentPeriod.title} | ${formatPeriodRange(state.currentPeriod)}`;
+  refs.submissionPeriodTitle.textContent = state.currentPeriod.title;
+  refs.submissionPeriodTime.textContent = `征集时间：${formatPeriodRange(state.currentPeriod)}`;
 
   if (isWithinPeriod(state.currentPeriod)) {
     refs.authStatus.textContent = "征集中";
     refs.authStatus.style.color = "var(--green)";
+    refs.submissionPeriodCard.classList.add("is-active");
+    refs.submissionPeriodCard.classList.remove("is-public");
+    refs.submissionPeriodState.textContent = "征集中";
     updateFormHint("当前处于征集期，可以投稿和点赞。", false);
   } else {
     refs.authStatus.textContent = "公示期";
     refs.authStatus.style.color = "var(--blue-deep)";
+    refs.submissionPeriodCard.classList.add("is-public");
+    refs.submissionPeriodCard.classList.remove("is-active");
+    refs.submissionPeriodState.textContent = "公示期";
     updateFormHint("当前歌单处于公示期，只读展示，不能投稿或点赞。", false);
   }
 }
