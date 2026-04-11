@@ -6,7 +6,7 @@
     <title>广播台明日歌单征集</title>
     <meta
       name="description"
-      content="面向校园广播台的明日歌单征集页面，支持投稿、点赞、搜索、排序与分页。"
+      content="广播台明日歌单征集页面，支持投稿、点赞、搜索、排序、公告和管理员发布。"
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -27,12 +27,13 @@
           <p class="eyebrow">Campus Radio Playlist</p>
           <h1>广播台明日歌单征集</h1>
           <p class="hero-text">
-            每天在这里投稿下一天想听的歌，也可以为喜欢的歌曲点赞。默认按点赞数排序，翻页、搜索和按时间查看都可以。
+            每天在这里投稿下一天想听的歌，也可以为喜欢的歌曲点赞。
           </p>
           <div class="hero-meta">
             <span class="pill pill-primary">当前征集</span>
             <span class="pill" id="targetDateLabel">载入中...</span>
             <span class="pill">一台设备 / 浏览器一票</span>
+            <button class="pill pill-button" id="settingsOpenBtn" type="button">设置</button>
           </div>
         </div>
 
@@ -53,13 +54,64 @@
       </header>
 
       <main class="layout">
+        <section class="card admin-panel hidden" id="adminPanel">
+          <div class="section-head">
+            <div>
+              <p class="section-tag">Admin</p>
+              <h2>管理员公告</h2>
+            </div>
+            <button class="primary-button secondary-btn compact-button" id="adminLogoutBtn" type="button">
+              退出管理
+            </button>
+          </div>
+
+          <form id="announcementForm" class="announcement-form">
+            <label class="field">
+              <span>公告标题</span>
+              <input
+                id="announcementTitle"
+                name="announcementTitle"
+                type="text"
+                maxlength="100"
+                placeholder="例如：明日点歌提醒"
+                required
+              />
+            </label>
+
+            <label class="field">
+              <span>公告内容</span>
+              <textarea
+                id="announcementContent"
+                name="announcementContent"
+                maxlength="1000"
+                placeholder="写下同学进入网站时需要先看到的内容"
+                required
+                rows="5"
+              ></textarea>
+            </label>
+
+            <div class="admin-actions">
+              <button class="primary-button compact-button" id="saveAnnouncementBtn" type="submit">
+                发布公告
+              </button>
+              <button class="primary-button secondary-btn compact-button" id="disableAnnouncementBtn" type="button">
+                关闭当前公告
+              </button>
+            </div>
+          </form>
+
+          <p class="form-hint" id="announcementHint">
+            发布后，未看过这条公告的同学进入网站时会先看到它。
+          </p>
+        </section>
+
         <section class="card form-panel">
           <div class="section-head">
             <div>
               <p class="section-tag">Submit</p>
               <h2>投稿一首歌</h2>
             </div>
-            <p class="section-note">请填写正确歌名和作者，提交后会立刻出现在明日歌单池中。</p>
+            <p class="section-note">请填写正确歌名和歌手，提交后会出现在明日歌单池中。</p>
           </div>
 
           <form id="songForm" class="song-form">
@@ -76,7 +128,7 @@
             </label>
 
             <label class="field">
-              <span>作者</span>
+              <span>歌手</span>
               <input
                 id="artistName"
                 name="artistName"
@@ -93,7 +145,7 @@
           </form>
 
           <p class="form-hint" id="formHint">
-            投稿后全站实时同步；如果同一首歌已经有人投过，会提醒你避免重复提交。
+            如果同一首歌已经有人投过，会提醒你直接为它点赞。
           </p>
         </section>
 
@@ -113,7 +165,7 @@
                 id="searchInput"
                 type="search"
                 maxlength="60"
-                placeholder="搜索歌名或作者"
+                placeholder="搜索歌名或歌手"
               />
             </label>
 
@@ -127,8 +179,8 @@
           </div>
 
           <div id="firebaseNotice" class="notice hidden">
-            <strong>还没有填写 Supabase 配置。</strong>
-            请先打开 <code>supabase-config.js</code>，填入你的项目参数后再刷新页面。
+            <strong>Supabase 配置不可用。</strong>
+            请检查 <code>supabase-config.js</code> 后刷新页面。
           </div>
 
           <div id="songsList" class="songs-list" aria-live="polite"></div>
@@ -136,6 +188,60 @@
           <div class="pagination" id="pagination"></div>
         </section>
       </main>
+    </div>
+
+    <div class="modal-overlay hidden" id="settingsModal">
+      <div class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <div class="modal-header">
+          <div>
+            <p class="section-tag">Settings</p>
+            <h2 id="settingsTitle">设置</h2>
+          </div>
+          <button class="icon-button" id="settingsCloseBtn" type="button" aria-label="关闭设置">&times;</button>
+        </div>
+
+        <form class="admin-login-form" id="adminLoginForm">
+          <p class="modal-copy">管理员登录后可以发布或关闭公告。</p>
+          <label class="field">
+            <span>管理员账号</span>
+            <input
+              id="adminUsername"
+              type="text"
+              autocomplete="username"
+              placeholder="请输入管理员账号"
+              required
+            />
+          </label>
+          <label class="field">
+            <span>密码</span>
+            <input
+              id="adminPassword"
+              type="password"
+              autocomplete="current-password"
+              placeholder="请输入密码"
+              required
+            />
+          </label>
+          <button class="primary-button" id="adminLoginBtn" type="submit">管理员登录</button>
+          <p class="form-hint admin-login-hint" id="adminLoginHint"></p>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal-overlay hidden" id="announcementModal">
+      <div class="announcement-modal" role="dialog" aria-modal="true" aria-labelledby="announcementModalTitle">
+        <div class="modal-header">
+          <div>
+            <p class="section-tag">Notice</p>
+            <h2 id="announcementModalTitle">公告</h2>
+          </div>
+          <button class="icon-button" id="announcementCloseBtn" type="button" aria-label="关闭公告">&times;</button>
+        </div>
+        <div class="announcement-modal-body" id="announcementModalContent"></div>
+        <div class="modal-footer">
+          <button class="primary-button compact-button" id="announcementAckBtn" type="button">我知道了</button>
+        </div>
+      </div>
     </div>
   </body>
 </html>

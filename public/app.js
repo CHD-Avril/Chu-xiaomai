@@ -1,8 +1,11 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
-import { supabaseConfig, hasValidSupabaseConfig, adminAccounts } from "./supabase-config.js";
+import { supabaseConfig, hasValidSupabaseConfig } from "./supabase-config.js";
 
-const SONGS_PER_PAGE = 6;
+const SONGS_PER_PAGE = 12;
 const TARGET_DATE = getTomorrowDateKey();
+const ADMIN_USERNAME = "CHU_CBS_XIAOMAI";
+const ADMIN_PASSWORD = "GBT666";
+const ANNOUNCEMENT_SEEN_KEY = "chu_xiaomai_seen_announcement_id";
 
 const state = {
   userId: "",
@@ -14,9 +17,9 @@ const state = {
   isSubmitting: false,
   likingSongId: "",
   backendReady: false,
-  isAdmin: false,
   isAdminAuthenticated: false,
   currentAnnouncement: null,
+  announcementReady: false,
   isSavingAnnouncement: false,
 };
 
@@ -35,9 +38,15 @@ const refs = {
   sortSelect: document.querySelector("#sortSelect"),
   songsList: document.querySelector("#songsList"),
   pagination: document.querySelector("#pagination"),
-  adminToggleBtn: document.querySelector("#adminToggleBtn"),
+  settingsOpenBtn: document.querySelector("#settingsOpenBtn"),
+  settingsModal: document.querySelector("#settingsModal"),
+  settingsCloseBtn: document.querySelector("#settingsCloseBtn"),
+  adminLoginForm: document.querySelector("#adminLoginForm"),
+  adminUsername: document.querySelector("#adminUsername"),
+  adminPassword: document.querySelector("#adminPassword"),
+  adminLoginHint: document.querySelector("#adminLoginHint"),
   adminPanel: document.querySelector("#adminPanel"),
-  adminCloseBtn: document.querySelector("#adminCloseBtn"),
+  adminLogoutBtn: document.querySelector("#adminLogoutBtn"),
   announcementForm: document.querySelector("#announcementForm"),
   announcementTitle: document.querySelector("#announcementTitle"),
   announcementContent: document.querySelector("#announcementContent"),
@@ -55,76 +64,15 @@ const supabase = hasValidSupabaseConfig()
   ? createClient(supabaseConfig.url, supabaseConfig.anonKey)
   : null;
 
-console.log("========== Supabase 配置信息 ==========");
-console.log("1. 配置有效性:", hasValidSupabaseConfig());
-console.log("2. 项目 URL:", supabaseConfig?.url || "未配置");
-console.log("3. Anon Key 前缀:", supabaseConfig?.anonKey ? supabaseConfig.anonKey.substring(0, 30) + "..." : "未配置");
-console.log("4. Supabase 客户端:", supabase ? "已创建" : "未创建");
-console.log("========================================");
-
-// 检查所有 DOM 元素
-console.log("\n🔍 检查 DOM 元素:");
-Object.keys(refs).forEach(key => {
-  if (refs[key] === null) {
-    console.error(`❌ ${key}: null (未找到)`);
-  } else {
-    console.log(`✅ ${key}: 找到`);
-  }
-});
-console.log("");
-
 refs.targetDateLabel.textContent = formatDateLabel(TARGET_DATE);
-
 bindEvents();
 render();
+syncFormButton();
 
-if (!hasValidSupabaseConfig()) {
-  console.error("❌ 错误: Supabase 配置无效");
-  console.error("请检查 public/supabase-config.js 文件");
-  refs.firebaseNotice.classList.remove("hidden");
-  refs.authStatus.textContent = "配置无效";
-  refs.authStatus.style.color = "var(--danger)";
-  refs.songsList.innerHTML = createEmptyState(
-    "数据库配置无效",
-    "请检查配置文件后刷新页面。"
-  );
-  syncFormButton();
+if (!supabase) {
+  showBackendConfigError();
 } else {
-  console.log("✅ 配置有效，开始连接数据库...");
-  console.log("\n🔍 测试 Supabase 连接...");
-  
-  // 先测试连接
-  supabase
-    .from(supabaseConfig.tables.songs)
-    .select("count", { count: 'exact', head: true })
-    .then(({ data, error }) => {
-      if (error) {
-        console.error("❌ 连接测试失败:", error);
-        console.error("错误详情:", error.message);
-        console.error("\n可能原因：");
-        console.error("1. 数据库表未创建 - 请执行 supabase-rls-setup.sql");
-        console.error("2. 网络连接问题 - 请检查网络");
-        console.error("3. Supabase 服务停机 - 请等待服务恢复");
-        console.error("4. 权限配置错误 - 请检查 RLS 策略");
-        refs.authStatus.textContent = "连接失败";
-        refs.authStatus.style.color = "var(--danger)";
-        refs.songsList.innerHTML = createEmptyState(
-          "数据库连接失败",
-          `错误: ${error.message}\n\n请:\n1. 按 F12 查看控制台详细错误\n2. 确认已执行 supabase-rls-setup.sql\n3. 检查网络连接\n4. 刷新页面重试`
-        );
-      } else {
-        console.log("✅ 连接测试成功！");
-        console.log("开始加载数据...\n");
-        refs.authStatus.textContent = "连接中...";
-        refs.authStatus.style.color = "var(--blue)";
-        bootSupabase();
-      }
-    })
-    .catch((err) => {
-      console.error("❌ 连接测试异常:", err);
-      refs.authStatus.textContent = "连接异常";
-      refs.authStatus.style.color = "var(--danger)";
-    });
+  bootSupabase();
 }
 
 function bindEvents() {
@@ -141,120 +89,74 @@ function bindEvents() {
   });
   refs.songsList.addEventListener("click", handleSongListClick);
   refs.pagination.addEventListener("click", handlePaginationClick);
-  
-  // 管理员相关事件（检查元素是否存在）
-  if (refs.adminToggleBtn) {
-    refs.adminToggleBtn.addEventListener("click", handleAdminToggle);
-  } else {
-    console.warn("⚠️ adminToggleBtn 元素未找到");
-  }
-  
-  if (refs.adminCloseBtn) {
-    refs.adminCloseBtn.addEventListener("click", handleAdminClose);
-  }
-  
-  if (refs.announcementForm) {
-    refs.announcementForm.addEventListener("submit", handleAnnouncementSubmit);
-  }
-  
-  if (refs.disableAnnouncementBtn) {
-    refs.disableAnnouncementBtn.addEventListener("click", handleDisableAnnouncement);
-  }
-  
-  if (refs.announcementCloseBtn) {
-    refs.announcementCloseBtn.addEventListener("click", closeAnnouncementModal);
-  }
-  
-  if (refs.announcementAckBtn) {
-    refs.announcementAckBtn.addEventListener("click", closeAnnouncementModal);
-  }
-  
-  // 点击模态框背景关闭
-  if (refs.announcementModal) {
-    refs.announcementModal.addEventListener("click", (event) => {
-      if (event.target === refs.announcementModal) {
-        closeAnnouncementModal();
-      }
-    });
-  }
+  refs.settingsOpenBtn.addEventListener("click", openSettingsModal);
+  refs.settingsCloseBtn.addEventListener("click", closeSettingsModal);
+  refs.settingsModal.addEventListener("click", (event) => {
+    if (event.target === refs.settingsModal) {
+      closeSettingsModal();
+    }
+  });
+  refs.adminLoginForm.addEventListener("submit", handleAdminLogin);
+  refs.adminLogoutBtn.addEventListener("click", handleAdminLogout);
+  refs.announcementForm.addEventListener("submit", handleAnnouncementSubmit);
+  refs.disableAnnouncementBtn.addEventListener("click", handleDisableAnnouncement);
+  refs.announcementCloseBtn.addEventListener("click", closeAnnouncementModal);
+  refs.announcementAckBtn.addEventListener("click", closeAnnouncementModal);
+  refs.announcementModal.addEventListener("click", (event) => {
+    if (event.target === refs.announcementModal) {
+      closeAnnouncementModal();
+    }
+  });
 }
 
 async function bootSupabase() {
-  console.log("\n========== 数据库连接调试 ==========");
   try {
-    console.log("步骤 1: 生成用户 ID...");
     state.userId = getOrCreateVisitorId();
-    console.log("   用户 ID:", state.userId);
-    
-    console.log("步骤 2: 设置后端状态...");
     state.backendReady = true;
     refs.authStatus.textContent = "同步中";
     refs.authStatus.style.color = "var(--blue-deep)";
     syncFormButton();
 
-    console.log("步骤 3: 同步歌曲和点赞数据...");
-    console.log("   开始请求数据，请稍候...");
-    
-    // 添加超时检测
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error("请求超时（10秒）- 请检查网络连接或 Supabase 服务状态")), 10000);
-    });
-    
-    await Promise.race([syncAllData(), timeoutPromise]);
-    
-    console.log("   歌曲数量:", state.songs.length);
-    console.log("   点赞数量:", state.likedSongIds.size);
-    
-    console.log("步骤 4: 获取公告...");
+    await syncAllData();
     await fetchAnnouncement();
-    console.log("   当前公告:", state.currentAnnouncement ? state.currentAnnouncement.title : "无");
-    
-    console.log("步骤 5: 检查公告显示...");
     checkAndShowAnnouncement();
 
     refs.authStatus.textContent = "已连接";
     refs.authStatus.style.color = "var(--green)";
-    console.log("\n✅ 数据库连接成功！");
-    console.log("========================================\n");
   } catch (error) {
-    console.error("\n❌ 数据库连接失败！");
-    console.error("错误类型:", error.name || "Unknown");
-    console.error("错误消息:", error.message);
-    console.error("错误详情:", error);
-    console.error("========================================\n");
-    
+    console.error("Supabase 同步失败:", error);
     refs.authStatus.textContent = "连接失败";
     refs.authStatus.style.color = "var(--danger)";
-    updateFormHint("数据库连接失败，请查看控制台 (F12) 获取详细信息。", true);
-    
-    // 在页面上显示错误信息
+    updateFormHint(`连接失败：${resolveErrorMessage(error)}`, true);
     refs.songsList.innerHTML = createEmptyState(
       "数据库连接失败",
-      `错误: ${error.message || "未知错误"}\n\n请:\n1. 按 F12 打开控制台查看详细错误\n2. 检查网络连接\n3. 确认 Supabase 项目正常运行\n4. 刷新页面重试`
+      "请检查网络或 Supabase 表配置后刷新页面。"
     );
   }
 }
 
+function showBackendConfigError() {
+  refs.firebaseNotice.classList.remove("hidden");
+  refs.authStatus.textContent = "配置不可用";
+  refs.authStatus.style.color = "var(--danger)";
+  refs.songsList.innerHTML = createEmptyState(
+    "Supabase 配置不可用",
+    "请检查 supabase-config.js 后刷新页面。"
+  );
+}
+
 async function syncAllData() {
   if (!state.backendReady) {
-    console.warn("后端未就绪，跳过数据同步");
     return;
   }
 
-  console.log("   3.1 获取歌曲列表...");
   const [songs, likes] = await Promise.all([fetchSongs(), fetchLikes()]);
-  console.log("   3.2 获取点赞列表...");
-  
   state.songs = songs;
   state.likedSongIds = new Set(likes.map((item) => item.song_id));
-  
-  console.log("   3.3 更新界面...");
   render();
-  console.log("   3.4 数据同步完成");
 }
 
 async function fetchSongs() {
-  console.log("      查询歌曲表...");
   const { data, error } = await supabase
     .from(supabaseConfig.tables.songs)
     .select("*")
@@ -262,11 +164,8 @@ async function fetchSongs() {
     .limit(500);
 
   if (error) {
-    console.error("      ❌ 查询歌曲失败:", error);
     throw error;
   }
-  
-  console.log("      ✅ 查询成功，获取到", data?.length || 0, "首歌曲");
 
   return (data ?? []).map((song) => ({
     id: song.id,
@@ -281,7 +180,6 @@ async function fetchSongs() {
 }
 
 async function fetchLikes() {
-  console.log("      查询点赞表...");
   const { data, error } = await supabase
     .from(supabaseConfig.tables.likes)
     .select("song_id")
@@ -290,11 +188,9 @@ async function fetchLikes() {
     .limit(500);
 
   if (error) {
-    console.error("      ❌ 查询点赞失败:", error);
     throw error;
   }
-  
-  console.log("      ✅ 查询成功，获取到", data?.length || 0, "个点赞");
+
   return data ?? [];
 }
 
@@ -312,7 +208,7 @@ async function handleSongSubmit(event) {
   const artistLower = normalizeText(artist);
 
   if (!title || !artist) {
-    updateFormHint("请先完整填写歌曲名字和作者。", true);
+    updateFormHint("请先完整填写歌曲名字和歌手。", true);
     return;
   }
 
@@ -349,7 +245,7 @@ async function handleSongSubmit(event) {
     await syncAllData();
   } catch (error) {
     console.error("投稿失败:", error);
-    updateFormHint("投稿失败，请检查网络后重试。", true);
+    updateFormHint(`投稿失败：${resolveErrorMessage(error)}`, true);
   } finally {
     state.isSubmitting = false;
     syncFormButton();
@@ -382,7 +278,7 @@ async function handleSongListClick(event) {
     await syncAllData();
   } catch (error) {
     console.error("点赞操作失败:", error);
-    alert("点赞失败，请检查网络后重试");
+    alert(`点赞失败：${resolveErrorMessage(error)}`);
   } finally {
     state.likingSongId = "";
     render();
@@ -493,11 +389,11 @@ function render() {
       state.songs.length ? "没有匹配的歌曲" : "歌单池还空着",
       state.songs.length
         ? "换一个关键词试试，或者切换排序方式看看。"
-        : "成为第一个投稿的人吧，大家会马上看到你的推荐。"
+        : "成为第一个投稿的人吧。"
     );
   } else {
     refs.songsList.innerHTML = currentSongs
-      .map((song, index) => createSongCard(song, startIndex + index + 1))
+      .map((song) => createSongCard(song))
       .join("");
   }
 
@@ -541,39 +437,29 @@ function sortByTime(firstSong, secondSong) {
   return firstSong.title.localeCompare(secondSong.title, "zh-CN");
 }
 
-function createSongCard(song, rank) {
+function createSongCard(song) {
   const isLiked = state.likedSongIds.has(song.id);
   const isBusy = state.likingSongId === song.id;
   const likeLabel = isBusy
-    ? "处理中..."
+    ? "处理中"
     : isLiked
-      ? `已点赞 ${song.likesCount}`
+      ? `已赞 ${song.likesCount}`
       : `点赞 ${song.likesCount}`;
 
   return `
     <article class="song-card">
-      <div class="song-topline">
-        <div class="song-title-wrap">
-          <h3 class="song-title">${escapeHtml(song.title)}</h3>
-          <p class="song-artist">${escapeHtml(song.artist)}</p>
-        </div>
-        <div class="song-rank">#${rank}</div>
-      </div>
-
-      <div class="song-footer">
-        <div class="song-meta">
-          <span class="song-badge">明日歌单</span>
-          <span class="song-badge">投稿时间 ${formatTime(song.createdAtMs)}</span>
-        </div>
-        <button
-          class="like-button ${isLiked ? "is-liked" : ""}"
-          type="button"
-          data-like-song="${song.id}"
-          ${isBusy ? "disabled" : ""}
-        >
-          ${likeLabel}
-        </button>
-      </div>
+      <p class="song-line" title="${escapeHtml(`${song.title} ${song.artist}`)}">
+        <span class="song-title">${escapeHtml(song.title)}</span>
+        <span class="song-artist">${escapeHtml(song.artist)}</span>
+      </p>
+      <button
+        class="like-button ${isLiked ? "is-liked" : ""}"
+        type="button"
+        data-like-song="${song.id}"
+        ${isBusy ? "disabled" : ""}
+      >
+        ${likeLabel}
+      </button>
     </article>
   `;
 }
@@ -631,13 +517,238 @@ function buildPageNumbers(pageCount, currentPage) {
 }
 
 function syncFormButton() {
-  refs.submitButton.disabled = state.isSubmitting || !state.userId;
+  refs.submitButton.disabled = state.isSubmitting || !state.userId || !state.backendReady;
   refs.submitButton.textContent = state.isSubmitting ? "提交中..." : "提交到明日歌单";
 }
 
 function updateFormHint(message, isError) {
   refs.formHint.textContent = message;
   refs.formHint.style.color = isError ? "var(--danger)" : "var(--muted)";
+}
+
+function openSettingsModal() {
+  refs.settingsModal.classList.remove("hidden");
+  refs.adminLoginHint.textContent = state.isAdminAuthenticated
+    ? "管理员已登录，可在页面上方发布公告。"
+    : "";
+  refs.adminLoginHint.style.color = state.isAdminAuthenticated ? "var(--green)" : "";
+
+  if (!state.isAdminAuthenticated) {
+    refs.adminUsername.focus();
+  }
+}
+
+function closeSettingsModal() {
+  refs.settingsModal.classList.add("hidden");
+  refs.adminLoginForm.reset();
+}
+
+function handleAdminLogin(event) {
+  event.preventDefault();
+
+  const username = refs.adminUsername.value.trim();
+  const password = refs.adminPassword.value;
+
+  if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+    refs.adminLoginHint.textContent = "账号或密码不正确。";
+    refs.adminLoginHint.style.color = "var(--danger)";
+    refs.adminPassword.value = "";
+    refs.adminPassword.focus();
+    return;
+  }
+
+  state.isAdminAuthenticated = true;
+  refs.adminPanel.classList.remove("hidden");
+  refs.settingsOpenBtn.textContent = "管理员已登录";
+  refs.adminLoginHint.textContent = "登录成功。";
+  refs.adminLoginHint.style.color = "var(--green)";
+  loadCurrentAnnouncementToForm();
+  closeSettingsModal();
+  refs.adminPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function handleAdminLogout() {
+  state.isAdminAuthenticated = false;
+  refs.adminPanel.classList.add("hidden");
+  refs.settingsOpenBtn.textContent = "设置";
+  refs.announcementForm.reset();
+  updateAnnouncementHint("发布后，未看过这条公告的同学进入网站时会先看到它。", false);
+}
+
+async function fetchAnnouncement() {
+  const tableName = supabaseConfig.tables?.announcements || "announcements";
+
+  try {
+    const { data, error } = await supabase
+      .from(tableName)
+      .select("*")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (error) {
+      throw error;
+    }
+
+    state.currentAnnouncement = data?.[0] ?? null;
+    state.announcementReady = true;
+
+    if (state.isAdminAuthenticated) {
+      loadCurrentAnnouncementToForm();
+    }
+  } catch (error) {
+    state.currentAnnouncement = null;
+    state.announcementReady = false;
+    console.warn("公告读取失败，点歌功能不受影响:", error);
+
+    if (state.isAdminAuthenticated) {
+      updateAnnouncementHint(`公告功能暂不可用：${resolveErrorMessage(error)}`, true);
+    }
+  }
+}
+
+function checkAndShowAnnouncement() {
+  if (!state.currentAnnouncement) {
+    return;
+  }
+
+  const seenAnnouncementId = localStorage.getItem(ANNOUNCEMENT_SEEN_KEY);
+  if (seenAnnouncementId !== state.currentAnnouncement.id) {
+    showAnnouncementModal(state.currentAnnouncement);
+  }
+}
+
+function showAnnouncementModal(announcement) {
+  refs.announcementModalTitle.textContent = announcement.title || "公告";
+  refs.announcementModalContent.textContent = announcement.content || "";
+  refs.announcementModal.classList.remove("hidden");
+}
+
+function closeAnnouncementModal() {
+  refs.announcementModal.classList.add("hidden");
+
+  if (state.currentAnnouncement?.id) {
+    localStorage.setItem(ANNOUNCEMENT_SEEN_KEY, state.currentAnnouncement.id);
+  }
+}
+
+function loadCurrentAnnouncementToForm() {
+  if (!state.currentAnnouncement) {
+    refs.announcementForm.reset();
+    return;
+  }
+
+  refs.announcementTitle.value = state.currentAnnouncement.title || "";
+  refs.announcementContent.value = state.currentAnnouncement.content || "";
+}
+
+async function handleAnnouncementSubmit(event) {
+  event.preventDefault();
+
+  if (!state.isAdminAuthenticated) {
+    alert("请先进行管理员登录。");
+    return;
+  }
+
+  if (!state.backendReady) {
+    updateAnnouncementHint("数据库未连接，暂时不能发布公告。", true);
+    return;
+  }
+
+  const title = refs.announcementTitle.value.trim();
+  const content = refs.announcementContent.value.trim();
+
+  if (!title || !content) {
+    updateAnnouncementHint("请填写完整的公告标题和内容。", true);
+    return;
+  }
+
+  const tableName = supabaseConfig.tables?.announcements || "announcements";
+  state.isSavingAnnouncement = true;
+  refs.saveAnnouncementBtn.disabled = true;
+  refs.disableAnnouncementBtn.disabled = true;
+  refs.saveAnnouncementBtn.textContent = "发布中...";
+  updateAnnouncementHint("正在发布公告...", false);
+
+  try {
+    const { error: disableError } = await supabase
+      .from(tableName)
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq("is_active", true);
+
+    if (disableError) {
+      throw disableError;
+    }
+
+    const { error: insertError } = await supabase
+      .from(tableName)
+      .insert({
+        title,
+        content,
+        is_active: true,
+        created_by: state.userId,
+      });
+
+    if (insertError) {
+      throw insertError;
+    }
+
+    await fetchAnnouncement();
+    updateAnnouncementHint("公告已发布。", false);
+    checkAndShowAnnouncement();
+  } catch (error) {
+    console.error("发布公告失败:", error);
+    updateAnnouncementHint(`发布失败：${resolveErrorMessage(error)}`, true);
+  } finally {
+    state.isSavingAnnouncement = false;
+    refs.saveAnnouncementBtn.disabled = false;
+    refs.disableAnnouncementBtn.disabled = false;
+    refs.saveAnnouncementBtn.textContent = "发布公告";
+  }
+}
+
+async function handleDisableAnnouncement() {
+  if (!state.isAdminAuthenticated) {
+    alert("请先进行管理员登录。");
+    return;
+  }
+
+  if (!state.backendReady) {
+    updateAnnouncementHint("数据库未连接，暂时不能关闭公告。", true);
+    return;
+  }
+
+  if (!confirm("确定要关闭当前公告吗？")) {
+    return;
+  }
+
+  const tableName = supabaseConfig.tables?.announcements || "announcements";
+
+  try {
+    refs.disableAnnouncementBtn.disabled = true;
+    const { error } = await supabase
+      .from(tableName)
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq("is_active", true);
+
+    if (error) {
+      throw error;
+    }
+
+    state.currentAnnouncement = null;
+    refs.announcementForm.reset();
+    updateAnnouncementHint("当前公告已关闭。", false);
+  } catch (error) {
+    console.error("关闭公告失败:", error);
+    updateAnnouncementHint(`关闭失败：${resolveErrorMessage(error)}`, true);
+  } finally {
+    refs.disableAnnouncementBtn.disabled = false;
+  }
+}
+
+function updateAnnouncementHint(message, isError) {
+  refs.announcementHint.textContent = message;
+  refs.announcementHint.style.color = isError ? "var(--danger)" : "var(--muted)";
 }
 
 function getOrCreateVisitorId() {
@@ -677,20 +788,6 @@ function formatDateLabel(dateKey) {
   return `${year} 年 ${month} 月 ${day} 日`;
 }
 
-function formatTime(milliseconds) {
-  if (!milliseconds) {
-    return "刚刚";
-  }
-
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(new Date(milliseconds));
-}
-
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -700,271 +797,6 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-// ==================== 管理员功能 ====================
-
-function handleAdminToggle() {
-  if (state.isAdmin) {
-    // 已经是管理员模式，关闭
-    handleAdminClose();
-    return;
-  }
-  
-  // 显示登录表单
-  showAdminLoginForm();
-}
-
-function showAdminLoginForm() {
-  // 创建登录对话框
-  const overlay = document.createElement('div');
-  overlay.className = 'admin-login-overlay';
-  overlay.innerHTML = `
-    <div class="admin-login-modal">
-      <div class="admin-login-header">
-        <h3>管理员登录</h3>
-        <button class="admin-login-close" type="button">&times;</button>
-      </div>
-      <form class="admin-login-form">
-        <label class="field">
-          <span>管理员账号</span>
-          <input
-            type="text"
-            class="admin-username-input"
-            placeholder="请输入管理员账号"
-            required
-            autocomplete="username"
-          />
-        </label>
-        <label class="field">
-          <span>密码</span>
-          <input
-            type="password"
-            class="admin-password-input"
-            placeholder="请输入密码"
-            required
-            autocomplete="current-password"
-          />
-        </label>
-        <button type="submit" class="primary-button admin-login-btn">登录</button>
-        <p class="admin-login-hint"></p>
-      </form>
-    </div>
-  `;
-  
-  document.body.appendChild(overlay);
-  
-  // 绑定事件
-  const closeBtn = overlay.querySelector('.admin-login-close');
-  const form = overlay.querySelector('.admin-login-form');
-  const usernameInput = overlay.querySelector('.admin-username-input');
-  const passwordInput = overlay.querySelector('.admin-password-input');
-  const hint = overlay.querySelector('.admin-login-hint');
-  
-  closeBtn.addEventListener('click', () => {
-    document.body.removeChild(overlay);
-  });
-  
-  overlay.addEventListener('click', (event) => {
-    if (event.target === overlay) {
-      document.body.removeChild(overlay);
-    }
-  });
-  
-  form.addEventListener('submit', (event) => {
-    event.preventDefault();
-    
-    const username = usernameInput.value.trim();
-    const password = passwordInput.value;
-    
-    if (!username || !password) {
-      hint.textContent = '请填写账号和密码';
-      hint.style.color = 'var(--danger)';
-      return;
-    }
-    
-    // 验证管理员账户
-    const adminAccount = adminAccounts.find(
-      account => account.username === username && account.password === password
-    );
-    
-    if (adminAccount) {
-      // 登录成功
-      document.body.removeChild(overlay);
-      state.isAdmin = true;
-      state.isAdminAuthenticated = true;
-      state.adminUsername = username;
-      refs.adminPanel.classList.remove('hidden');
-      refs.adminToggleBtn.textContent = '管理已开启';
-      refs.adminToggleBtn.style.background = 'linear-gradient(135deg, var(--green), #2ea043)';
-      
-      // 加载当前公告
-      loadCurrentAnnouncementToForm();
-    } else {
-      hint.textContent = '账号或密码错误';
-      hint.style.color = 'var(--danger)';
-      passwordInput.value = '';
-    }
-  });
-  
-  // 自动聚焦到用户名输入框
-  usernameInput.focus();
-}
-
-function handleAdminClose() {
-  state.isAdmin = false;
-  refs.adminPanel.classList.add("hidden");
-  refs.adminToggleBtn.textContent = "管理员模式";
-  refs.adminToggleBtn.style.background = "";
-}
-
-async function fetchAnnouncement() {
-  try {
-    console.log("      查询公告表...");
-    const { data, error } = await supabase
-      .from(supabaseConfig.tables.announcements)
-      .select("*")
-      .eq("is_active", true)
-      .order("created_at", { ascending: false })
-      .limit(1);
-    
-    if (error) {
-      console.error("      ❌ 查询公告失败:", error);
-      console.warn("      公告表可能不存在或未创建");
-      return;
-    }
-    
-    if (data && data.length > 0) {
-      state.currentAnnouncement = data[0];
-      console.log("      ✅ 获取到公告:", data[0].title);
-    } else {
-      state.currentAnnouncement = null;
-      console.log("      ℹ️ 没有启用的公告");
-    }
-  } catch (error) {
-    console.error("      ❌ 获取公告异常:", error);
-  }
-}
-
-function checkAndShowAnnouncement() {
-  // 检查用户是否已经看过公告
-  const hasSeenAnnouncement = localStorage.getItem("chu_xiaomai_seen_announcement");
-  
-  if (state.currentAnnouncement && !hasSeenAnnouncement) {
-    showAnnouncementModal(state.currentAnnouncement);
-  }
-}
-
-function showAnnouncementModal(announcement) {
-  refs.announcementModalTitle.textContent = announcement.title || "公告";
-  refs.announcementModalContent.textContent = announcement.content || "";
-  refs.announcementModal.classList.remove("hidden");
-}
-
-function closeAnnouncementModal() {
-  refs.announcementModal.classList.add("hidden");
-  // 记录用户已看过公告
-  localStorage.setItem("chu_xiaomai_seen_announcement", "true");
-}
-
-function loadCurrentAnnouncementToForm() {
-  if (state.currentAnnouncement) {
-    refs.announcementTitle.value = state.currentAnnouncement.title || "";
-    refs.announcementContent.value = state.currentAnnouncement.content || "";
-  } else {
-    refs.announcementForm.reset();
-  }
-}
-
-async function handleAnnouncementSubmit(event) {
-  event.preventDefault();
-  
-  if (!state.isAdminAuthenticated) {
-    alert("请先进行管理员认证！");
-    return;
-  }
-  
-  const title = refs.announcementTitle.value.trim();
-  const content = refs.announcementContent.value.trim();
-  
-  if (!title || !content) {
-    updateAnnouncementHint("请填写完整的标题和内容", true);
-    return;
-  }
-  
-  state.isSavingAnnouncement = true;
-  refs.saveAnnouncementBtn.disabled = true;
-  refs.saveAnnouncementBtn.textContent = "保存中...";
-  updateAnnouncementHint("正在保存公告...", false);
-  
-  try {
-    // 先禁用所有旧公告
-    await supabase
-      .from(supabaseConfig.tables.announcements)
-      .update({ is_active: false })
-      .eq("is_active", true);
-    
-    // 插入新公告
-    const { error } = await supabase
-      .from(supabaseConfig.tables.announcements)
-      .insert({
-        title,
-        content,
-        is_active: true,
-        created_by: state.userId,
-      });
-    
-    if (error) {
-      throw error;
-    }
-    
-    updateAnnouncementHint("公告保存成功！", false);
-    
-    // 更新本地状态
-    await fetchAnnouncement();
-    
-    // 清空表单
-    refs.announcementForm.reset();
-  } catch (error) {
-    console.error("保存公告失败:", error);
-    updateAnnouncementHint(`保存失败：${resolveErrorMessage(error)}`, true);
-  } finally {
-    state.isSavingAnnouncement = false;
-    refs.saveAnnouncementBtn.disabled = false;
-    refs.saveAnnouncementBtn.textContent = "保存公告";
-  }
-}
-
-async function handleDisableAnnouncement() {
-  if (!state.isAdminAuthenticated) {
-    alert("请先进行管理员认证！");
-    return;
-  }
-  
-  if (!confirm("确定要禁用当前公告吗？用户将不再看到公告弹窗。")) {
-    return;
-  }
-  
-  try {
-    const { error } = await supabase
-      .from(supabaseConfig.tables.announcements)
-      .update({ is_active: false })
-      .eq("is_active", true);
-    
-    if (error) {
-      throw error;
-    }
-    
-    updateAnnouncementHint("公告已禁用", false);
-    
-    // 更新本地状态
-    state.currentAnnouncement = null;
-    refs.announcementForm.reset();
-  } catch (error) {
-    console.error("禁用公告失败:", error);
-    updateAnnouncementHint(`禁用失败：${resolveErrorMessage(error)}`, true);
-  }
-}
-
-function updateAnnouncementHint(message, isError) {
-  refs.announcementHint.textContent = message;
-  refs.announcementHint.style.color = isError ? "var(--danger)" : "var(--muted)";
+function resolveErrorMessage(error) {
+  return error?.message || error?.details || "未知错误";
 }
