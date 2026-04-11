@@ -262,6 +262,7 @@ button {
 }
 
 .song-form,
+.period-form,
 .announcement-form,
 .admin-login-form {
   display: grid;
@@ -381,15 +382,88 @@ button {
   gap: 16px;
 }
 
+.period-panel,
+.history-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.period-panel h3,
+.history-panel h3,
 .export-panel h3 {
   margin: 0 0 8px;
   font-size: 1.2rem;
 }
 
+.period-time-grid,
 .export-controls {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 180px;
   gap: 14px;
+}
+
+.period-time-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.period-history-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.history-period-button {
+  display: grid;
+  gap: 6px;
+  min-height: 64px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--text);
+  text-align: left;
+  font-weight: 800;
+}
+
+.history-period-button small {
+  color: var(--muted);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.history-period-button.is-active {
+  border-color: rgba(26, 115, 232, 0.42);
+  background: rgba(26, 115, 232, 0.1);
+}
+
+.history-songs-list {
+  display: grid;
+  gap: 8px;
+}
+
+.history-readonly-label,
+.empty-inline {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.history-song-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.history-song-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .controls {
@@ -685,6 +759,7 @@ button {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .period-time-grid,
   .export-controls {
     grid-template-columns: 1fr;
   }

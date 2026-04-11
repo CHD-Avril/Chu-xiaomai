@@ -57,14 +57,63 @@
           <div class="section-head">
             <div>
               <p class="section-tag">Admin</p>
-              <h2>管理员公告</h2>
+              <h2>管理员控制台</h2>
             </div>
             <button class="primary-button secondary-btn compact-button" id="adminLogoutBtn" type="button">
               退出管理
             </button>
           </div>
 
+          <div class="period-panel">
+            <div>
+              <p class="section-tag">Period</p>
+              <h3>设置征集期</h3>
+              <p class="section-note">在征集期内可以投稿和点赞；结束后保留公示，但不能再改动。</p>
+            </div>
+
+            <form id="periodForm" class="period-form">
+              <label class="field">
+                <span>期次名称</span>
+                <input
+                  id="periodTitle"
+                  type="text"
+                  maxlength="80"
+                  placeholder="例如：第 12 周周三广播歌单"
+                  required
+                />
+              </label>
+
+              <div class="period-time-grid">
+                <label class="field">
+                  <span>开始时间</span>
+                  <input id="periodStart" type="datetime-local" required />
+                </label>
+                <label class="field">
+                  <span>结束时间</span>
+                  <input id="periodEnd" type="datetime-local" required />
+                </label>
+              </div>
+
+              <div class="admin-actions">
+                <button class="primary-button compact-button" id="savePeriodBtn" type="submit">
+                  设置为当前征集期
+                </button>
+                <button class="primary-button secondary-btn compact-button" id="archivePeriodBtn" type="button">
+                  清除当前歌单
+                </button>
+              </div>
+            </form>
+
+            <p class="form-hint" id="periodHint">还没有设置当前征集期。</p>
+          </div>
+
+          <div class="admin-divider"></div>
+
           <form id="announcementForm" class="announcement-form">
+            <div>
+              <p class="section-tag">Notice</p>
+              <h3>管理员公告</h3>
+            </div>
             <label class="field">
               <span>公告标题</span>
               <input
@@ -102,6 +151,19 @@
           <p class="form-hint" id="announcementHint">
             发布后，未看过这条公告的同学进入网站时会先看到它。
           </p>
+
+          <div class="admin-divider"></div>
+
+          <div class="history-panel">
+            <div>
+              <p class="section-tag">History</p>
+              <h3>历史歌单记录</h3>
+              <p class="section-note">已留存的每一次歌单记录为只读，只显示歌曲与点赞数量。</p>
+            </div>
+            <div id="periodHistoryList" class="period-history-list"></div>
+            <div id="historySongsList" class="history-songs-list"></div>
+            <p class="form-hint" id="historyHint">登录后会加载历史记录。</p>
+          </div>
 
           <div class="admin-divider"></div>
 
@@ -143,7 +205,7 @@
               </button>
             </div>
 
-            <p class="form-hint" id="exportHint">会导出当前征集日期下的歌曲。</p>
+            <p class="form-hint" id="exportHint">会导出当前歌单或已选历史记录。</p>
           </div>
         </section>
 
