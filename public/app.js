@@ -456,9 +456,18 @@ function render() {
           : "等待管理员设置新的征集期。"
     );
   } else {
-    refs.songsList.innerHTML = currentSongs
-      .map((song, index) => createSongCard(song, startIndex + index + 1))
-      .join("");
+    refs.songsList.innerHTML = `
+      <div class="songs-table-header" aria-hidden="true">
+        <span>序号</span>
+        <span>歌曲</span>
+        <span>歌手</span>
+        <span>点赞</span>
+        <span>操作</span>
+      </div>
+      ${currentSongs
+        .map((song, index) => createSongCard(song, startIndex + index + 1))
+        .join("")}
+    `;
   }
 
   refs.pagination.innerHTML = createPagination(pageCount);
@@ -551,11 +560,10 @@ function createSongCard(song, rank) {
 
   return `
     <article class="song-card">
-      <div class="song-rank-dot">${rank}</div>
-      <div class="song-main" title="${escapeHtml(`${song.title} ${song.artist}`)}">
-        <p class="song-title">${escapeHtml(song.title)}</p>
-        <p class="song-artist">${escapeHtml(song.artist)}</p>
-      </div>
+      <div class="song-index">${String(rank).padStart(2, "0")}</div>
+      <div class="song-title" title="${escapeHtml(song.title)}">${escapeHtml(song.title)}</div>
+      <div class="song-artist" title="${escapeHtml(song.artist)}">${escapeHtml(song.artist)}</div>
+      <div class="song-like-count">${song.likesCount || 0}</div>
       <button
         class="like-button ${isLiked ? "is-liked" : ""}"
         type="button"

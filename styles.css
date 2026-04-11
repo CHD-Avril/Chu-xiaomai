@@ -544,9 +544,10 @@ button {
   display: grid;
   gap: 0;
   overflow: hidden;
-  border: 1px solid rgba(26, 115, 232, 0.18);
-  border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(22, 49, 79, 0.14);
+  border-radius: 10px;
+  background: #f5f9ff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 .empty-state {
@@ -555,14 +556,28 @@ button {
   border: 1px solid var(--line);
 }
 
+.songs-table-header,
 .song-card {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) auto;
+  grid-template-columns: 56px minmax(140px, 1.4fr) minmax(120px, 1fr) 72px 88px;
   align-items: center;
-  gap: 14px;
-  min-height: 62px;
-  padding: 10px 14px;
+  gap: 0;
+}
+
+.songs-table-header {
+  min-height: 38px;
+  padding: 0;
   border-bottom: 1px solid rgba(22, 49, 79, 0.12);
+  background: rgba(231, 239, 250, 0.92);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.song-card {
+  min-height: 56px;
+  padding: 0;
+  border-bottom: 1px solid rgba(22, 49, 79, 0.1);
   background: transparent;
   animation: rise-in 0.24s ease;
 }
@@ -572,67 +587,93 @@ button {
 }
 
 .song-card:hover {
-  background: rgba(26, 115, 232, 0.06);
+  background: rgba(220, 233, 250, 0.72);
 }
 
-.song-rank-dot {
-  display: inline-flex;
+.songs-table-header span,
+.song-index,
+.song-title,
+.song-artist,
+.song-like-count,
+.song-card .like-button {
+  min-width: 0;
+  height: 100%;
+  padding: 0 12px;
+  border-right: 1px solid rgba(22, 49, 79, 0.08);
+}
+
+.songs-table-header span,
+.song-index,
+.song-like-count {
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  background: rgba(251, 188, 4, 0.28);
-  color: #6c4a00;
-  font-size: 0.84rem;
+}
+
+.song-index {
+  color: #7a8799;
+  font-size: 0.9rem;
   font-weight: 800;
-}
-
-.song-main {
-  min-width: 0;
-}
-
-.song-title,
-.song-artist {
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .song-title {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text);
   font-size: 1rem;
   font-weight: 800;
-  line-height: 1.35;
 }
 
 .song-artist {
-  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--muted);
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   font-weight: 600;
-  line-height: 1.35;
+}
+
+.song-like-count {
+  color: var(--text);
+  font-weight: 800;
 }
 
 .like-button {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 86px;
-  min-height: 34px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: rgba(251, 188, 4, 0.14);
-  color: #825900;
-  font-size: 1rem;
+  min-width: 0;
+  min-height: 56px;
+  border-radius: 0;
+  background: transparent;
+  color: var(--blue-deep);
+  font-size: 0.95rem;
   font-weight: 800;
   white-space: nowrap;
 }
 
 .like-button.is-liked {
-  background: linear-gradient(135deg, var(--yellow), #ffd95e);
-  color: #5d4200;
+  background: rgba(30, 142, 62, 0.1);
+  color: var(--green);
+}
+
+.song-card .like-button:hover {
+  transform: none;
+  background: rgba(26, 115, 232, 0.08);
+}
+
+.song-card .like-button.is-liked:hover {
+  background: rgba(30, 142, 62, 0.14);
+}
+
+.song-card .like-button:last-child,
+.songs-table-header span:last-child {
+  border-right: 0;
 }
 
 .empty-state {
@@ -883,21 +924,14 @@ button {
     justify-content: center;
   }
 
+  .songs-table-header,
   .song-card {
-    grid-template-columns: 36px minmax(0, 1fr) auto;
-    gap: 8px;
-    padding: 10px;
-  }
-
-  .song-rank-dot {
-    width: 30px;
-    height: 30px;
-    font-size: 0.78rem;
+    grid-template-columns: 42px minmax(0, 1.2fr) minmax(0, 0.9fr) 54px 68px;
   }
 
   .like-button {
-    min-width: 72px;
-    padding: 0 10px;
-    font-size: 0.92rem;
+    min-width: 0;
+    padding: 0 8px;
+    font-size: 0.86rem;
   }
 }
