@@ -89,9 +89,9 @@ button {
 
 .hero {
   display: grid;
-  grid-template-columns: 1.4fr 0.9fr;
-  gap: 28px;
-  padding: 34px;
+  grid-template-columns: minmax(0, 1.3fr) minmax(420px, 0.9fr);
+  gap: 22px;
+  padding: 28px;
   overflow: hidden;
 }
 
@@ -193,18 +193,20 @@ button {
 
 .hero-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
-  align-content: start;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-content: center;
+  align-items: stretch;
 }
 
 .stat-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-height: 136px;
-  padding: 22px 18px;
-  border-radius: var(--radius-lg);
+  justify-content: center;
+  gap: 4px;
+  min-height: 68px;
+  padding: 10px 12px;
+  border-radius: 14px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(242, 248, 255, 0.88));
   border: 1px solid var(--line);
@@ -212,17 +214,20 @@ button {
 
 .stat-label {
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .stat-value {
-  font-size: 1.8rem;
+  font-size: 1.25rem;
   line-height: 1.1;
+  white-space: nowrap;
 }
 
 .stat-status {
   color: var(--green);
-  font-size: 1.2rem;
+  font-size: 1rem;
 }
 
 .layout {
@@ -363,6 +368,28 @@ button {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.admin-divider {
+  height: 1px;
+  margin: 24px 0;
+  background: var(--line);
+}
+
+.export-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.export-panel h3 {
+  margin: 0 0 8px;
+  font-size: 1.2rem;
+}
+
+.export-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 14px;
 }
 
 .controls {
@@ -650,8 +677,15 @@ button {
     border-radius: 24px;
   }
 
-  .hero-stats,
   .controls {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .export-controls {
     grid-template-columns: 1fr;
   }
 

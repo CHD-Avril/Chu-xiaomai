@@ -53,6 +53,11 @@ const refs = {
   saveAnnouncementBtn: document.querySelector("#saveAnnouncementBtn"),
   disableAnnouncementBtn: document.querySelector("#disableAnnouncementBtn"),
   announcementHint: document.querySelector("#announcementHint"),
+  exportOrderSelect: document.querySelector("#exportOrderSelect"),
+  exportCountInput: document.querySelector("#exportCountInput"),
+  copyExportBtn: document.querySelector("#copyExportBtn"),
+  downloadExportBtn: document.querySelector("#downloadExportBtn"),
+  exportHint: document.querySelector("#exportHint"),
   announcementModal: document.querySelector("#announcementModal"),
   announcementModalTitle: document.querySelector("#announcementModalTitle"),
   announcementModalContent: document.querySelector("#announcementModalContent"),
@@ -100,6 +105,8 @@ function bindEvents() {
   refs.adminLogoutBtn.addEventListener("click", handleAdminLogout);
   refs.announcementForm.addEventListener("submit", handleAnnouncementSubmit);
   refs.disableAnnouncementBtn.addEventListener("click", handleDisableAnnouncement);
+  refs.copyExportBtn.addEventListener("click", handleCopyExport);
+  refs.downloadExportBtn.addEventListener("click", handleDownloadExport);
   refs.announcementCloseBtn.addEventListener("click", closeAnnouncementModal);
   refs.announcementAckBtn.addEventListener("click", closeAnnouncementModal);
   refs.announcementModal.addEventListener("click", (event) => {
@@ -573,6 +580,7 @@ function handleAdminLogout() {
   refs.settingsOpenBtn.textContent = "设置";
   refs.announcementForm.reset();
   updateAnnouncementHint("发布后，未看过这条公告的同学进入网站时会先看到它。", false);
+  updateExportHint("会导出当前征集日期下的歌曲。", false);
 }
 
 async function fetchAnnouncement() {
@@ -749,6 +757,120 @@ async function handleDisableAnnouncement() {
 function updateAnnouncementHint(message, isError) {
   refs.announcementHint.textContent = message;
   refs.announcementHint.style.color = isError ? "var(--danger)" : "var(--muted)";
+}
+
+async function handleCopyExport() {
+  if (!state.isAdminAuthenticated) {
+    alert("请先进行管理员登录。");
+    return;
+  }
+
+  const exportText = buildExportText();
+  if (!exportText) {
+    return;
+  }
+
+  try {
+    await copyTextToClipboard(exportText);
+    updateExportHint("已复制到剪贴板。", false);
+  } catch (error) {
+    console.error("复制导出文本失败:", error);
+    updateExportHint("复制失败，请改用导出 TXT。", true);
+  }
+}
+
+function handleDownloadExport() {
+  if (!state.isAdminAuthenticated) {
+    alert("请先进行管理员登录。");
+    return;
+  }
+
+  const exportText = buildExportText();
+  if (!exportText) {
+    return;
+  }
+
+  const blob = new Blob([exportText], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `chu_xiaomai_${TARGET_DATE}_songs.txt`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  updateExportHint("TXT 已开始导出。", false);
+}
+
+function buildExportText() {
+  const exportSongs = getExportSongs();
+
+  if (!exportSongs.length) {
+    updateExportHint("当前没有可以导出的歌曲。", true);
+    return "";
+  }
+
+  const orderLabel = refs.exportOrderSelect.value === "likes-asc"
+    ? "点赞从低到高"
+    : "点赞从高到低";
+
+  const lines = exportSongs.map((song, index) => {
+    return `${index + 1}. ${song.title} - ${song.artist}（点赞：${song.likesCount || 0}）`;
+  });
+
+  return [
+    `广播台明日歌单导出`,
+    `征集日期：${formatDateLabel(TARGET_DATE)}`,
+    `导出顺序：${orderLabel}`,
+    `导出数量：${exportSongs.length}`,
+    "",
+    ...lines,
+  ].join("\n");
+}
+
+function getExportSongs() {
+  const requestedCount = Number.parseInt(refs.exportCountInput.value, 10);
+  const exportCount = Number.isInteger(requestedCount)
+    ? Math.min(Math.max(requestedCount, 1), 500)
+    : 10;
+
+  refs.exportCountInput.value = String(exportCount);
+
+  return [...state.songs]
+    .sort((firstSong, secondSong) => {
+      const likeGap = refs.exportOrderSelect.value === "likes-asc"
+        ? (firstSong.likesCount || 0) - (secondSong.likesCount || 0)
+        : (secondSong.likesCount || 0) - (firstSong.likesCount || 0);
+
+      if (likeGap !== 0) {
+        return likeGap;
+      }
+
+      return sortByTime(firstSong, secondSong);
+    })
+    .slice(0, exportCount);
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
+}
+
+function updateExportHint(message, isError) {
+  refs.exportHint.textContent = message;
+  refs.exportHint.style.color = isError ? "var(--danger)" : "var(--muted)";
 }
 
 function getOrCreateVisitorId() {

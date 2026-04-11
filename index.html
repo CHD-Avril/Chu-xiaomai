@@ -32,7 +32,6 @@
           <div class="hero-meta">
             <span class="pill pill-primary">当前征集</span>
             <span class="pill" id="targetDateLabel">载入中...</span>
-            <span class="pill">一台设备 / 浏览器一票</span>
             <button class="pill pill-button" id="settingsOpenBtn" type="button">设置</button>
           </div>
         </div>
@@ -103,6 +102,49 @@
           <p class="form-hint" id="announcementHint">
             发布后，未看过这条公告的同学进入网站时会先看到它。
           </p>
+
+          <div class="admin-divider"></div>
+
+          <div class="export-panel">
+            <div>
+              <p class="section-tag">Export</p>
+              <h3>导出歌单</h3>
+              <p class="section-note">按点赞顺序导出指定数量的歌曲信息。</p>
+            </div>
+
+            <div class="export-controls">
+              <label class="field">
+                <span>点赞顺序</span>
+                <select id="exportOrderSelect">
+                  <option value="likes-desc">点赞从高到低</option>
+                  <option value="likes-asc">点赞从低到高</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span>导出数量</span>
+                <input
+                  id="exportCountInput"
+                  type="number"
+                  min="1"
+                  max="500"
+                  value="10"
+                  inputmode="numeric"
+                />
+              </label>
+            </div>
+
+            <div class="admin-actions">
+              <button class="primary-button compact-button" id="copyExportBtn" type="button">
+                复制文本
+              </button>
+              <button class="primary-button secondary-btn compact-button" id="downloadExportBtn" type="button">
+                导出 TXT
+              </button>
+            </div>
+
+            <p class="form-hint" id="exportHint">会导出当前征集日期下的歌曲。</p>
+          </div>
         </section>
 
         <section class="card form-panel">
