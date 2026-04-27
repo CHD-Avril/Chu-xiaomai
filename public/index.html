@@ -31,7 +31,7 @@
         </a>
         <nav class="site-nav" aria-label="页面导航">
           <a href="#top" class="is-active">首页</a>
-          <a href="#submit">节目介绍</a>
+          <a href="#noticeBoard">告示栏</a>
           <a href="./history.html">往期歌单</a>
           <a href="#submit">小麦君</a>
         </nav>
@@ -142,9 +142,9 @@
               </label>
               <div class="admin-actions">
                 <button class="primary-button compact-button" id="saveAnnouncementBtn" type="submit">发布公告</button>
-                <button class="primary-button secondary-btn compact-button" id="disableAnnouncementBtn" type="button">关闭公告</button>
+                <button class="primary-button secondary-btn compact-button" id="disableAnnouncementBtn" type="button">关闭最新公告</button>
               </div>
-              <p class="form-hint" id="announcementHint">公告会以弹窗展示给访问者。</p>
+              <p class="form-hint" id="announcementHint">最新公告会弹窗展示，最近三条公告会保存在首页告示栏。</p>
             </form>
           </div>
 
@@ -184,26 +184,12 @@
         </section>
 
         <section class="content-grid" id="submit">
-          <aside class="card method-card">
-            <p class="section-tag">How To</p>
-            <h2>投稿方式</h2>
-            <ol class="timeline">
-              <li>
-                <span>01</span>
-                <strong>填写歌单</strong>
-                <p>在右侧表单中填写歌曲信息</p>
-              </li>
-              <li>
-                <span>02</span>
-                <strong>分享故事</strong>
-                <p>用歌名和歌手留下你的音乐心情</p>
-              </li>
-              <li>
-                <span>03</span>
-                <strong>等待播放</strong>
-                <p>小麦君会认真聆听每一份歌单</p>
-              </li>
-            </ol>
+          <aside class="card notice-board" id="noticeBoard">
+            <p class="section-tag">Notice Board</p>
+            <h2>告示栏</h2>
+            <div class="notice-board-list" id="noticeBoardList">
+              <div class="empty-inline">正在读取公告...</div>
+            </div>
           </aside>
 
           <section class="card form-panel">

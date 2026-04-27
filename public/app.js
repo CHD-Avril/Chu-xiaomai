@@ -25,6 +25,7 @@ const state = {
   backendReady: false,
   isAdminAuthenticated: false,
   currentAnnouncement: null,
+  announcements: [],
 };
 
 const refs = {
@@ -70,6 +71,7 @@ const refs = {
   saveAnnouncementBtn: document.querySelector("#saveAnnouncementBtn"),
   disableAnnouncementBtn: document.querySelector("#disableAnnouncementBtn"),
   announcementHint: document.querySelector("#announcementHint"),
+  noticeBoardList: document.querySelector("#noticeBoardList"),
   periodHistoryList: document.querySelector("#periodHistoryList"),
   historySongsList: document.querySelector("#historySongsList"),
   historyHint: document.querySelector("#historyHint"),
@@ -164,6 +166,7 @@ function showBackendConfigError() {
   refs.authStatus.textContent = "未配置";
   refs.authStatus.style.color = "var(--danger)";
   refs.songsList.innerHTML = createEmptyState("Supabase 尚未配置", "请先在 supabase-config.js 中填写项目配置。");
+  refs.noticeBoardList.innerHTML = `<div class="empty-inline">Supabase 尚未配置，暂时无法读取公告。</div>`;
 }
 
 async function syncPeriods() {
@@ -762,12 +765,16 @@ async function fetchAnnouncement() {
       .select("*")
       .eq("is_active", true)
       .order("created_at", { ascending: false })
-      .limit(1);
+      .limit(3);
     if (error) throw error;
-    state.currentAnnouncement = data?.[0] ?? null;
+    state.announcements = data ?? [];
+    state.currentAnnouncement = state.announcements[0] ?? null;
+    renderNoticeBoard();
     if (state.isAdminAuthenticated) loadCurrentAnnouncementToForm();
   } catch (error) {
+    state.announcements = [];
     state.currentAnnouncement = null;
+    renderNoticeBoard("公告读取失败，请稍后刷新。");
     console.warn("公告读取失败:", error);
     if (state.isAdminAuthenticated) updateAnnouncementHint(`公告读取失败：${resolveErrorMessage(error)}`, true);
   }
@@ -786,6 +793,25 @@ function showAnnouncementModal(announcement) {
 
 function closeAnnouncementModal() {
   refs.announcementModal.classList.add("hidden");
+}
+
+function renderNoticeBoard(fallbackMessage = "暂无公告。") {
+  if (!state.announcements.length) {
+    refs.noticeBoardList.innerHTML = `<div class="empty-inline">${escapeHtml(fallbackMessage)}</div>`;
+    return;
+  }
+
+  refs.noticeBoardList.innerHTML = state.announcements
+    .map((announcement) => `
+      <article class="notice-board-item">
+        <div>
+          <strong>${escapeHtml(announcement.title || "公告")}</strong>
+          <time>${escapeHtml(formatDateTime(Date.parse(announcement.created_at ?? "") || 0))}</time>
+        </div>
+        <p>${escapeHtml(announcement.content || "")}</p>
+      </article>
+    `)
+    .join("");
 }
 
 function loadCurrentAnnouncementToForm() {
@@ -821,7 +847,6 @@ async function handleAnnouncementSubmit(event) {
   refs.saveAnnouncementBtn.textContent = "发布中...";
   updateAnnouncementHint("正在发布公告...", false);
   try {
-    await supabase.from(tableName).update({ is_active: false, updated_at: new Date().toISOString() }).eq("is_active", true);
     const { error } = await supabase.from(tableName).insert({
       title,
       content,
@@ -830,7 +855,7 @@ async function handleAnnouncementSubmit(event) {
     });
     if (error) throw error;
     await fetchAnnouncement();
-    updateAnnouncementHint("公告已发布。", false);
+    updateAnnouncementHint("公告已发布，并已加入告示栏。", false);
     checkAndShowAnnouncement();
   } catch (error) {
     console.error("发布公告失败:", error);
@@ -851,7 +876,11 @@ async function handleDisableAnnouncement() {
     updateAnnouncementHint("后端尚未连接，无法关闭公告。", true);
     return;
   }
-  if (!confirm("确定要关闭当前公告吗？")) return;
+  if (!state.currentAnnouncement?.id) {
+    updateAnnouncementHint("当前没有可关闭的公告。", true);
+    return;
+  }
+  if (!confirm("确定要关闭最新公告吗？关闭后它不会继续弹窗或显示在告示栏。")) return;
 
   const tableName = supabaseConfig.tables?.announcements || "announcements";
   try {
@@ -859,11 +888,11 @@ async function handleDisableAnnouncement() {
     const { error } = await supabase
       .from(tableName)
       .update({ is_active: false, updated_at: new Date().toISOString() })
-      .eq("is_active", true);
+      .eq("id", state.currentAnnouncement.id);
     if (error) throw error;
-    state.currentAnnouncement = null;
+    await fetchAnnouncement();
     refs.announcementForm.reset();
-    updateAnnouncementHint("公告已关闭。", false);
+    updateAnnouncementHint("最新公告已关闭。", false);
   } catch (error) {
     console.error("关闭公告失败:", error);
     updateAnnouncementHint(`关闭失败：${resolveErrorMessage(error)}`, true);
