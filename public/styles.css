@@ -666,10 +666,26 @@ a {
 .notice-board-item {
   display: grid;
   gap: 8px;
+  width: 100%;
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
+  color: var(--text);
+  text-align: left;
   background: rgba(248, 251, 255, 0.78);
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.notice-board-item:hover,
+.notice-board-item:focus-visible {
+  border-color: rgba(21, 88, 207, 0.28);
+  box-shadow: var(--shadow-soft);
+  transform: translateY(-1px);
+  outline: none;
 }
 
 .notice-board-item div {

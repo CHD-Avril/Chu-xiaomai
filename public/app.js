@@ -117,6 +117,7 @@ function bindEvents() {
   refs.songsList.addEventListener("click", handleSongListClick);
   refs.pagination.addEventListener("click", handlePaginationClick);
   refs.pagination.addEventListener("submit", handlePaginationJump);
+  refs.noticeBoardList.addEventListener("click", handleNoticeBoardClick);
   refs.settingsOpenBtn.addEventListener("click", openSettingsModal);
   refs.settingsCloseBtn.addEventListener("click", closeSettingsModal);
   refs.settingsModal.addEventListener("click", (event) => {
@@ -795,6 +796,14 @@ function closeAnnouncementModal() {
   refs.announcementModal.classList.add("hidden");
 }
 
+function handleNoticeBoardClick(event) {
+  const button = event.target.closest("[data-notice-id]");
+  if (!button) return;
+
+  const announcement = state.announcements.find((item) => item.id === button.dataset.noticeId);
+  if (announcement) showAnnouncementModal(announcement);
+}
+
 function renderNoticeBoard(fallbackMessage = "暂无公告。") {
   if (!state.announcements.length) {
     refs.noticeBoardList.innerHTML = `<div class="empty-inline">${escapeHtml(fallbackMessage)}</div>`;
@@ -803,13 +812,13 @@ function renderNoticeBoard(fallbackMessage = "暂无公告。") {
 
   refs.noticeBoardList.innerHTML = state.announcements
     .map((announcement) => `
-      <article class="notice-board-item">
+      <button class="notice-board-item" type="button" data-notice-id="${escapeHtml(announcement.id)}">
         <div>
           <strong>${escapeHtml(announcement.title || "公告")}</strong>
           <time>${escapeHtml(formatDateTime(Date.parse(announcement.created_at ?? "") || 0))}</time>
         </div>
         <p>${escapeHtml(announcement.content || "")}</p>
-      </article>
+      </button>
     `)
     .join("");
 }
