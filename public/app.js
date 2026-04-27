@@ -797,10 +797,11 @@ function closeAnnouncementModal() {
 }
 
 function handleNoticeBoardClick(event) {
-  const button = event.target.closest("[data-notice-id]");
+  const button = event.target.closest("[data-notice-index]");
   if (!button) return;
 
-  const announcement = state.announcements.find((item) => item.id === button.dataset.noticeId);
+  const noticeIndex = Number(button.dataset.noticeIndex);
+  const announcement = Number.isInteger(noticeIndex) ? state.announcements[noticeIndex] : null;
   if (announcement) showAnnouncementModal(announcement);
 }
 
@@ -811,8 +812,8 @@ function renderNoticeBoard(fallbackMessage = "暂无公告。") {
   }
 
   refs.noticeBoardList.innerHTML = state.announcements
-    .map((announcement) => `
-      <button class="notice-board-item" type="button" data-notice-id="${escapeHtml(announcement.id)}">
+    .map((announcement, index) => `
+      <button class="notice-board-item" type="button" data-notice-index="${index}" aria-label="查看公告：${escapeHtml(announcement.title || "公告")}">
         <div>
           <strong>${escapeHtml(announcement.title || "公告")}</strong>
           <time>${escapeHtml(formatDateTime(Date.parse(announcement.created_at ?? "") || 0))}</time>
