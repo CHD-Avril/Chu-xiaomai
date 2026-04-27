@@ -579,7 +579,10 @@ async function handlePeriodSubmit(event) {
     };
     const { error } = state.currentPeriod
       ? await supabase.from(PERIODS_TABLE).update(payload).eq("id", state.currentPeriod.id)
-      : await supabase.from(PERIODS_TABLE).insert(payload);
+      : await supabase.from(PERIODS_TABLE).insert({
+          ...payload,
+          created_by: state.userId || ADMIN_USERNAME,
+        });
     if (error) throw error;
     await syncPeriods();
     await syncAllData();
