@@ -654,25 +654,40 @@ a {
 
 .notice-board {
   display: grid;
+  align-self: start;
   align-content: start;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.92)),
+    var(--surface);
 }
 
 .notice-board-list {
   display: grid;
-  gap: 12px;
-  margin-top: 22px;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.notice-board-copy {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.65;
 }
 
 .notice-board-item {
   display: grid;
-  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
   width: 100%;
-  padding: 14px;
-  border: 1px solid var(--line);
+  min-height: 118px;
+  padding: 14px 14px 13px;
+  border: 1px solid rgba(21, 88, 207, 0.12);
   border-radius: 8px;
   color: var(--text);
   text-align: left;
-  background: rgba(248, 251, 255, 0.78);
+  background: rgba(255, 255, 255, 0.86);
   cursor: pointer;
   transition:
     border-color 0.18s ease,
@@ -688,19 +703,53 @@ a {
   outline: none;
 }
 
-.notice-board-item div {
+.notice-board-item.is-latest {
+  border-color: rgba(255, 203, 18, 0.38);
+  background:
+    linear-gradient(135deg, rgba(255, 245, 189, 0.7), rgba(255, 255, 255, 0.9) 42%),
+    #fff;
+}
+
+.notice-board-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 900;
+  background: var(--blue);
+}
+
+.notice-board-item.is-latest .notice-board-mark {
+  color: #0b2b57;
+  background: var(--yellow);
+}
+
+.notice-board-main {
   display: grid;
-  gap: 4px;
+  gap: 7px;
+  min-width: 0;
+}
+
+.notice-board-title-row {
+  display: grid;
+  gap: 5px;
 }
 
 .notice-board-item strong {
-  font-size: 1rem;
+  overflow: hidden;
+  font-size: 0.98rem;
   line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .notice-board-item time {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 800;
 }
 
@@ -714,6 +763,12 @@ a {
   font-size: 0.92rem;
   line-height: 1.65;
   white-space: pre-wrap;
+}
+
+.notice-board-open {
+  color: var(--blue);
+  font-size: 0.8rem;
+  font-weight: 900;
 }
 
 .song-form,

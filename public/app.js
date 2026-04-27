@@ -813,12 +813,16 @@ function renderNoticeBoard(fallbackMessage = "暂无公告。") {
 
   refs.noticeBoardList.innerHTML = state.announcements
     .map((announcement, index) => `
-      <button class="notice-board-item" type="button" data-notice-index="${index}" aria-label="查看公告：${escapeHtml(announcement.title || "公告")}">
-        <div>
-          <strong>${escapeHtml(announcement.title || "公告")}</strong>
-          <time>${escapeHtml(formatDateTime(Date.parse(announcement.created_at ?? "") || 0))}</time>
+      <button class="notice-board-item ${index === 0 ? "is-latest" : ""}" type="button" data-notice-index="${index}" aria-label="查看公告：${escapeHtml(announcement.title || "公告")}">
+        <span class="notice-board-mark">${index === 0 ? "新" : String(index + 1).padStart(2, "0")}</span>
+        <div class="notice-board-main">
+          <div class="notice-board-title-row">
+            <strong>${escapeHtml(announcement.title || "公告")}</strong>
+            <time>${escapeHtml(formatDateTime(Date.parse(announcement.created_at ?? "") || 0))}</time>
+          </div>
+          <p>${escapeHtml(announcement.content || "")}</p>
+          <span class="notice-board-open">点击查看完整告示</span>
         </div>
-        <p>${escapeHtml(announcement.content || "")}</p>
       </button>
     `)
     .join("");
