@@ -3,15 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>广播台明日歌单征集</title>
+    <title>长安大学广播台 | 长大小麦君征集歌单</title>
     <meta
       name="description"
-      content="广播台明日歌单征集页面，支持投稿、点赞、搜索、排序、公告和管理员发布。"
+      content="长安大学广播台长大小麦君歌单征集平台，提交你想在校园广播中听到的歌曲。"
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
@@ -19,322 +19,308 @@
   </head>
   <body>
     <div class="page-shell">
-      <div class="hero-glow hero-glow-left"></div>
-      <div class="hero-glow hero-glow-right"></div>
+      <header class="site-header">
+        <a class="brand" href="#top" aria-label="长安大学广播台首页">
+          <span class="brand-mark" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span>
+          </span>
+          <span>
+            <strong>长安大学广播台</strong>
+            <small>CHD RADIO STATION</small>
+          </span>
+        </a>
+        <nav class="site-nav" aria-label="页面导航">
+          <a href="#top" class="is-active">首页</a>
+          <a href="#submit">节目介绍</a>
+          <a href="#playlist">往期歌单</a>
+          <a href="#submit">小麦君</a>
+        </nav>
+        <button class="nav-action" id="settingsOpenBtn" type="button">
+          <span aria-hidden="true">✈</span>
+          管理入口
+        </button>
+      </header>
 
-      <header class="hero card">
-        <div class="hero-copy">
-          <p class="eyebrow">Campus Radio Playlist</p>
-          <h1>广播台明日歌单征集</h1>
-          <p class="hero-text">
-            每天在这里投稿下一天想听的歌，也可以为喜欢的歌曲点赞。
-          </p>
-          <div class="hero-meta">
-            <span class="pill pill-primary">当前征集</span>
-            <span class="pill" id="targetDateLabel">载入中...</span>
-            <button class="pill pill-button" id="settingsOpenBtn" type="button">设置</button>
+      <main id="top">
+        <section class="hero">
+          <div class="hero-copy">
+            <p class="eyebrow">CHD RADIO</p>
+            <h1><span>长大小麦君</span><strong>征集歌单</strong></h1>
+            <p class="hero-text">每一首歌，都是故事。让长大小麦君，遇见你的歌单。</p>
+            <div class="hero-actions">
+              <a class="primary-button hero-button" href="#submit">♫ 立即投稿</a>
+              <span class="pill" id="targetDateLabel">正在读取征集期...</span>
+            </div>
           </div>
-        </div>
 
-        <div class="hero-stats">
+          <div class="hero-visual" aria-hidden="true">
+            <div class="orbit orbit-one"></div>
+            <div class="orbit orbit-two"></div>
+            <div class="dot dot-blue"></div>
+            <div class="dot dot-yellow"></div>
+            <div class="record">
+              <div class="record-core">
+                <span></span><span></span><span></span><span></span><span></span>
+              </div>
+            </div>
+            <div class="wave-bars">
+              <span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+          </div>
+        </section>
+
+        <section class="feature-strip" aria-label="平台特点">
+          <article>
+            <span class="feature-icon">♡</span>
+            <h2>表达热爱</h2>
+            <p>分享你喜欢的音乐</p>
+          </article>
+          <article>
+            <span class="feature-icon is-yellow">☷</span>
+            <h2>传递故事</h2>
+            <p>用歌曲讲述你的故事</p>
+          </article>
+          <article>
+            <span class="feature-icon">⌁</span>
+            <h2>校园共鸣</h2>
+            <p>让更多人听见你的心声</p>
+          </article>
+          <article>
+            <span class="feature-icon is-yellow">♬</span>
+            <h2>优质歌单</h2>
+            <p>有机会在广播中播出</p>
+          </article>
+        </section>
+
+        <section class="stats-row" aria-label="征集状态">
           <div class="stat-card">
-            <span class="stat-label">歌曲总数</span>
+            <span class="stat-label">已投稿歌曲</span>
             <strong class="stat-value" id="songCount">0</strong>
           </div>
           <div class="stat-card">
-            <span class="stat-label">总点赞数</span>
+            <span class="stat-label">累计喜欢</span>
             <strong class="stat-value" id="likeCount">0</strong>
           </div>
           <div class="stat-card">
             <span class="stat-label">当前状态</span>
-            <strong class="stat-value stat-status" id="authStatus">准备连接</strong>
+            <strong class="stat-value stat-status" id="authStatus">连接中</strong>
           </div>
-        </div>
-      </header>
+        </section>
 
-      <main class="layout">
         <section class="card admin-panel hidden" id="adminPanel">
           <div class="section-head">
             <div>
               <p class="section-tag">Admin</p>
-              <h2>管理员控制台</h2>
+              <h2>管理员工作台</h2>
             </div>
             <button class="primary-button secondary-btn compact-button" id="adminLogoutBtn" type="button">
-              退出管理
+              退出登录
             </button>
           </div>
 
-          <div class="period-panel">
-            <div>
+          <div class="admin-grid">
+            <div class="period-panel admin-block">
               <p class="section-tag">Period</p>
-              <h3>设置征集期</h3>
-              <p class="section-note">在征集期内可以投稿和点赞；结束后保留公示，但不能再改动。</p>
+              <h3>征集期设置</h3>
+              <p class="section-note">设置当前开放投稿与点赞的时间窗口。</p>
+              <form id="periodForm" class="period-form">
+                <label class="field">
+                  <span>征集期标题</span>
+                  <input id="periodTitle" type="text" maxlength="80" placeholder="如：第 12 期校园歌单" required />
+                </label>
+                <div class="period-time-grid">
+                  <label class="field">
+                    <span>开始时间</span>
+                    <input id="periodStart" type="datetime-local" required />
+                  </label>
+                  <label class="field">
+                    <span>结束时间</span>
+                    <input id="periodEnd" type="datetime-local" required />
+                  </label>
+                </div>
+                <div class="admin-actions">
+                  <button class="primary-button compact-button" id="savePeriodBtn" type="submit">保存征集期</button>
+                  <button class="primary-button secondary-btn compact-button" id="archivePeriodBtn" type="button">
+                    归档当前歌单
+                  </button>
+                </div>
+              </form>
+              <p class="form-hint" id="periodHint">等待读取征集期。</p>
             </div>
 
-            <form id="periodForm" class="period-form">
-              <label class="field">
-                <span>期次名称</span>
-                <input
-                  id="periodTitle"
-                  type="text"
-                  maxlength="80"
-                  placeholder="例如：第 12 周周三广播歌单"
-                  required
-                />
-              </label>
-
-              <div class="period-time-grid">
-                <label class="field">
-                  <span>开始时间</span>
-                  <input id="periodStart" type="datetime-local" required />
-                </label>
-                <label class="field">
-                  <span>结束时间</span>
-                  <input id="periodEnd" type="datetime-local" required />
-                </label>
-              </div>
-
-              <div class="admin-actions">
-                <button class="primary-button compact-button" id="savePeriodBtn" type="submit">
-                  设置为当前征集期
-                </button>
-                <button class="primary-button secondary-btn compact-button" id="archivePeriodBtn" type="button">
-                  清除当前歌单
-                </button>
-              </div>
-            </form>
-
-            <p class="form-hint" id="periodHint">还没有设置当前征集期。</p>
-          </div>
-
-          <div class="admin-divider"></div>
-
-          <form id="announcementForm" class="announcement-form">
-            <div>
+            <form id="announcementForm" class="announcement-form admin-block">
               <p class="section-tag">Notice</p>
-              <h3>管理员公告</h3>
-            </div>
-            <label class="field">
-              <span>公告标题</span>
-              <input
-                id="announcementTitle"
-                name="announcementTitle"
-                type="text"
-                maxlength="100"
-                placeholder="例如：明日点歌提醒"
-                required
-              />
-            </label>
-
-            <label class="field">
-              <span>公告内容</span>
-              <textarea
-                id="announcementContent"
-                name="announcementContent"
-                maxlength="1000"
-                placeholder="写下同学进入网站时需要先看到的内容"
-                required
-                rows="5"
-              ></textarea>
-            </label>
-
-            <div class="admin-actions">
-              <button class="primary-button compact-button" id="saveAnnouncementBtn" type="submit">
-                发布公告
-              </button>
-              <button class="primary-button secondary-btn compact-button" id="disableAnnouncementBtn" type="button">
-                关闭当前公告
-              </button>
-            </div>
-          </form>
-
-          <p class="form-hint" id="announcementHint">
-            发布后，未看过这条公告的同学进入网站时会先看到它。
-          </p>
-
-          <div class="admin-divider"></div>
-
-          <div class="history-panel">
-            <div>
-              <p class="section-tag">History</p>
-              <h3>历史歌单记录</h3>
-              <p class="section-note">已留存的每一次歌单记录为只读，只显示歌曲与点赞数量。</p>
-            </div>
-            <div id="periodHistoryList" class="period-history-list"></div>
-            <div id="historySongsList" class="history-songs-list"></div>
-            <p class="form-hint" id="historyHint">登录后会加载历史记录。</p>
+              <h3>公告发布</h3>
+              <label class="field">
+                <span>公告标题</span>
+                <input id="announcementTitle" name="announcementTitle" type="text" maxlength="100" placeholder="如：本期征集开始啦" required />
+              </label>
+              <label class="field">
+                <span>公告内容</span>
+                <textarea id="announcementContent" name="announcementContent" maxlength="1000" placeholder="写下要展示给同学们的通知" required rows="5"></textarea>
+              </label>
+              <div class="admin-actions">
+                <button class="primary-button compact-button" id="saveAnnouncementBtn" type="submit">发布公告</button>
+                <button class="primary-button secondary-btn compact-button" id="disableAnnouncementBtn" type="button">关闭公告</button>
+              </div>
+              <p class="form-hint" id="announcementHint">公告会以弹窗展示给访问者。</p>
+            </form>
           </div>
 
-          <div class="admin-divider"></div>
+          <div class="admin-grid">
+            <div class="history-panel admin-block">
+              <p class="section-tag">History</p>
+              <h3>历史歌单</h3>
+              <p class="section-note">查看或导出已归档的往期征集。</p>
+              <div id="periodHistoryList" class="period-history-list"></div>
+              <div id="historySongsList" class="history-songs-list"></div>
+              <p class="form-hint" id="historyHint">选择一个征集期查看。</p>
+            </div>
 
-          <div class="export-panel">
-            <div>
+            <div class="export-panel admin-block">
               <p class="section-tag">Export</p>
               <h3>导出歌单</h3>
-              <p class="section-note">按点赞顺序导出指定数量的歌曲信息。</p>
+              <div class="export-controls">
+                <label class="field">
+                  <span>排序方式</span>
+                  <select id="exportOrderSelect">
+                    <option value="likes-desc">喜欢数从高到低</option>
+                    <option value="likes-asc">喜欢数从低到高</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>导出数量</span>
+                  <input id="exportCountInput" type="number" min="1" max="500" value="10" inputmode="numeric" />
+                </label>
+              </div>
+              <div class="admin-actions">
+                <button class="primary-button compact-button" id="copyExportBtn" type="button">复制歌单</button>
+                <button class="primary-button secondary-btn compact-button" id="downloadExportBtn" type="button">下载 TXT</button>
+              </div>
+              <p class="form-hint" id="exportHint">可按当前或历史歌单导出。</p>
             </div>
-
-            <div class="export-controls">
-              <label class="field">
-                <span>点赞顺序</span>
-                <select id="exportOrderSelect">
-                  <option value="likes-desc">点赞从高到低</option>
-                  <option value="likes-asc">点赞从低到高</option>
-                </select>
-              </label>
-
-              <label class="field">
-                <span>导出数量</span>
-                <input
-                  id="exportCountInput"
-                  type="number"
-                  min="1"
-                  max="500"
-                  value="10"
-                  inputmode="numeric"
-                />
-              </label>
-            </div>
-
-            <div class="admin-actions">
-              <button class="primary-button compact-button" id="copyExportBtn" type="button">
-                复制文本
-              </button>
-              <button class="primary-button secondary-btn compact-button" id="downloadExportBtn" type="button">
-                导出 TXT
-              </button>
-            </div>
-
-            <p class="form-hint" id="exportHint">会导出当前歌单或已选历史记录。</p>
           </div>
         </section>
 
-        <section class="card form-panel">
-          <div class="section-head">
-            <div>
-              <p class="section-tag">Submit</p>
-              <h2>投稿一首歌</h2>
+        <section class="content-grid" id="submit">
+          <aside class="card method-card">
+            <p class="section-tag">How To</p>
+            <h2>投稿方式</h2>
+            <ol class="timeline">
+              <li>
+                <span>01</span>
+                <strong>填写歌单</strong>
+                <p>在右侧表单中填写歌曲信息</p>
+              </li>
+              <li>
+                <span>02</span>
+                <strong>分享故事</strong>
+                <p>用歌名和歌手留下你的音乐心情</p>
+              </li>
+              <li>
+                <span>03</span>
+                <strong>等待播放</strong>
+                <p>小麦君会认真聆听每一份歌单</p>
+              </li>
+            </ol>
+          </aside>
+
+          <section class="card form-panel">
+            <div class="section-head">
+              <div>
+                <p class="section-tag">Submit</p>
+                <h2>提交你的歌单</h2>
+              </div>
             </div>
-            <p class="section-note">请填写正确歌名和歌手，提交后会出现在明日歌单池中。</p>
-          </div>
 
-          <div class="submission-period-card" id="submissionPeriodCard">
-            <span class="period-state-chip" id="submissionPeriodState">未开放</span>
-            <div>
-              <strong id="submissionPeriodTitle">暂未设置征集期</strong>
-              <p id="submissionPeriodTime">等待管理员设置本次歌单征集时间。</p>
+            <div class="submission-period-card" id="submissionPeriodCard">
+              <span class="period-state-chip" id="submissionPeriodState">读取中</span>
+              <div>
+                <strong id="submissionPeriodTitle">正在读取征集期</strong>
+                <p id="submissionPeriodTime">管理员设置征集期后即可投稿。</p>
+              </div>
             </div>
-          </div>
 
-          <form id="songForm" class="song-form">
-            <label class="field">
-              <span>歌曲名字</span>
-              <input
-                id="songTitle"
-                name="songTitle"
-                type="text"
-                maxlength="80"
-                placeholder="例如：晴天"
-                required
-              />
-            </label>
-
-            <label class="field">
-              <span>歌手</span>
-              <input
-                id="artistName"
-                name="artistName"
-                type="text"
-                maxlength="80"
-                placeholder="例如：周杰伦"
-                required
-              />
-            </label>
-
-            <button class="primary-button" id="submitButton" type="submit">
-              提交到明日歌单
-            </button>
-          </form>
-
-          <p class="form-hint" id="formHint">
-            如果同一首歌已经有人投过，会提醒你直接为它点赞。
-          </p>
+            <form id="songForm" class="song-form">
+              <label class="field">
+                <span>歌曲标题</span>
+                <input id="songTitle" name="songTitle" type="text" maxlength="80" placeholder="给你的歌单起一个名字吧" required />
+              </label>
+              <label class="field">
+                <span>歌手名称</span>
+                <input id="artistName" name="artistName" type="text" maxlength="80" placeholder="填写歌手或乐队名称" required />
+              </label>
+              <button class="primary-button" id="submitButton" type="submit">✈ 提交歌单</button>
+            </form>
+            <p class="form-hint" id="formHint">提交后会出现在右侧歌单中，同一首歌请勿重复投稿。</p>
+          </section>
         </section>
 
-        <section class="card list-panel">
+        <section class="card list-panel" id="playlist">
           <div class="section-head list-head">
             <div>
               <p class="section-tag">Vote & Search</p>
-              <h2>歌单池</h2>
+              <h2>正在征集的歌单</h2>
             </div>
-            <p class="section-note">默认按点赞数排序，也可以切换为最新投稿。</p>
+            <p class="section-note">搜索歌曲，给喜欢的投稿点亮支持。</p>
           </div>
 
           <div class="controls">
             <label class="field search-field">
               <span>搜索</span>
-              <input
-                id="searchInput"
-                type="search"
-                maxlength="60"
-                placeholder="搜索歌名或歌手"
-              />
+              <input id="searchInput" type="search" maxlength="60" placeholder="搜索歌曲或歌手" />
             </label>
-
             <label class="field sort-field">
               <span>排序</span>
               <select id="sortSelect">
-                <option value="likes">点赞数优先</option>
-                <option value="time">最新投稿优先</option>
+                <option value="likes">按喜欢数排序</option>
+                <option value="time">按投稿时间排序</option>
               </select>
             </label>
           </div>
 
           <div id="firebaseNotice" class="notice hidden">
-            <strong>Supabase 配置不可用。</strong>
-            请检查 <code>supabase-config.js</code> 后刷新页面。
+            <strong>Supabase 尚未配置。</strong>
+            请在 <code>supabase-config.js</code> 中填写项目地址和 anon key。
           </div>
 
           <div id="songsList" class="songs-list" aria-live="polite"></div>
-
           <div class="pagination" id="pagination"></div>
         </section>
       </main>
     </div>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <span class="brand-mark small" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span>
+        </span>
+        <p><strong>用声音陪伴你的每一段时光</strong><br />长安大学广播台 · 长大小麦君</p>
+        <b>在长大，听见更多美好</b>
+      </div>
+    </footer>
 
     <div class="modal-overlay hidden" id="settingsModal">
       <div class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
         <div class="modal-header">
           <div>
             <p class="section-tag">Settings</p>
-            <h2 id="settingsTitle">设置</h2>
+            <h2 id="settingsTitle">管理员登录</h2>
           </div>
-          <button class="icon-button" id="settingsCloseBtn" type="button" aria-label="关闭设置">&times;</button>
+          <button class="icon-button" id="settingsCloseBtn" type="button" aria-label="关闭管理员登录">&times;</button>
         </div>
-
         <form class="admin-login-form" id="adminLoginForm">
-          <p class="modal-copy">管理员登录后可以发布或关闭公告。</p>
+          <p class="modal-copy">登录后可以设置征集期、发布公告、归档和导出歌单。</p>
           <label class="field">
             <span>管理员账号</span>
-            <input
-              id="adminUsername"
-              type="text"
-              autocomplete="username"
-              placeholder="请输入管理员账号"
-              required
-            />
+            <input id="adminUsername" type="text" autocomplete="username" placeholder="请输入管理员账号" required />
           </label>
           <label class="field">
             <span>密码</span>
-            <input
-              id="adminPassword"
-              type="password"
-              autocomplete="current-password"
-              placeholder="请输入密码"
-              required
-            />
+            <input id="adminPassword" type="password" autocomplete="current-password" placeholder="请输入密码" required />
           </label>
-          <button class="primary-button" id="adminLoginBtn" type="submit">管理员登录</button>
+          <button class="primary-button" id="adminLoginBtn" type="submit">登录管理后台</button>
           <p class="form-hint admin-login-hint" id="adminLoginHint"></p>
         </form>
       </div>
