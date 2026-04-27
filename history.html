@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>往期歌单 | 长大广播台小麦君</title>
+    <meta name="description" content="查看长安大学广播台小麦君已归档的往期征集歌单。" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="module" src="./history.js"></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header">
+        <a class="brand" href="./index.html" aria-label="长安大学广播台首页">
+          <span class="brand-mark" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span>
+          </span>
+          <span>
+            <strong>长安大学广播台</strong>
+            <small>CHU Broadcast Station</small>
+          </span>
+        </a>
+        <nav class="site-nav" aria-label="页面导航">
+          <a href="./index.html">首页</a>
+          <a href="./index.html#submit">节目介绍</a>
+          <a href="./history.html" class="is-active">往期歌单</a>
+          <a href="./index.html#submit">小麦君</a>
+        </nav>
+        <a class="nav-action" href="./index.html#submit">
+          <span aria-hidden="true">♫</span>
+          返回征集
+        </a>
+      </header>
+
+      <main class="history-page">
+        <section class="history-hero card">
+          <div>
+            <p class="section-tag">Archive</p>
+            <h1>往期征集歌单</h1>
+            <p>这里保存已经归档的征集结果，只读展示，方便回看每一期同学们留下的歌曲。</p>
+          </div>
+          <span class="pill" id="historyStatus">正在读取往期歌单...</span>
+        </section>
+
+        <section class="card history-browser">
+          <div class="section-head">
+            <div>
+              <p class="section-tag">History</p>
+              <h2>选择一期歌单</h2>
+            </div>
+            <p class="section-note" id="periodMeta">读取完成后会自动展示最新一期归档歌单。</p>
+          </div>
+
+          <label class="field history-period-field">
+            <span>往期征集</span>
+            <select id="historyPeriodSelect" disabled>
+              <option>正在读取...</option>
+            </select>
+          </label>
+
+          <div class="history-summary" aria-label="歌单统计">
+            <div class="stat-card">
+              <span class="stat-label">收录歌曲</span>
+              <strong class="stat-value" id="historySongCount">0</strong>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">累计喜欢</span>
+              <strong class="stat-value" id="historyLikeCount">0</strong>
+            </div>
+          </div>
+
+          <div id="historySongsTable" class="readonly-songs-list" aria-live="polite"></div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <span class="brand-mark small" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span>
+        </span>
+        <p><strong>用声音陪伴你的每一段时光</strong><br />长大广播台 · 长大点歌台</p>
+        <b>让歌声留在每一期小麦君里</b>
+      </div>
+    </footer>
+  </body>
+</html>

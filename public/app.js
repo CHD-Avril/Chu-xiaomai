@@ -2,10 +2,12 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { supabaseConfig, hasValidSupabaseConfig } from "./supabase-config.js";
 
 const SONGS_PER_PAGE = 12;
+const HISTORY_PREVIEW_LIMIT = 6;
 const ADMIN_USERNAME = "CHU_CBS_XIAOMAI";
 const ADMIN_PASSWORD = "GBT666";
-const ANNOUNCEMENT_SEEN_KEY = "chu_xiaomai_seen_announcement_id";
 const PERIODS_TABLE = "playlist_periods";
+const VISITOR_COOKIE_NAME = "chu_xiaomai_voter_id";
+const LEGACY_VISITOR_STORAGE_KEY = "chu_xiaomai_visitor_id";
 
 const state = {
   userId: "",
@@ -27,6 +29,8 @@ const state = {
 
 const refs = {
   targetDateLabel: document.querySelector("#targetDateLabel"),
+  targetPeriodTitle: document.querySelector("#targetPeriodTitle"),
+  targetPeriodTime: document.querySelector("#targetPeriodTime"),
   songCount: document.querySelector("#songCount"),
   likeCount: document.querySelector("#likeCount"),
   authStatus: document.querySelector("#authStatus"),
@@ -85,7 +89,7 @@ const supabase = hasValidSupabaseConfig()
   ? createClient(supabaseConfig.url, supabaseConfig.anonKey)
   : null;
 
-refs.targetDateLabel.textContent = "正在读取征集期";
+updateHeroPeriodLabel("正在读取征集期", "");
 bindEvents();
 render();
 syncFormButton();
@@ -110,6 +114,7 @@ function bindEvents() {
   });
   refs.songsList.addEventListener("click", handleSongListClick);
   refs.pagination.addEventListener("click", handlePaginationClick);
+  refs.pagination.addEventListener("submit", handlePaginationJump);
   refs.settingsOpenBtn.addEventListener("click", openSettingsModal);
   refs.settingsCloseBtn.addEventListener("click", closeSettingsModal);
   refs.settingsModal.addEventListener("click", (event) => {
@@ -209,7 +214,7 @@ async function fetchLikes() {
     .from(supabaseConfig.tables.likes)
     .select("song_id")
     .eq("playlist_date", state.currentPeriod.id)
-    .eq("user_id", state.userId)
+    .eq("voter_cookie", state.userId)
     .limit(500);
   if (error) throw error;
   return data ?? [];
@@ -301,48 +306,23 @@ async function handleSongListClick(event) {
 }
 
 async function likeSong(songId) {
-  const { error: insertError } = await supabase.from(supabaseConfig.tables.likes).insert({
-    song_id: songId,
-    user_id: state.userId,
-    playlist_date: state.currentPeriod.id,
+  const { error } = await supabase.rpc("toggle_song_like", {
+    p_song_id: songId,
+    p_playlist_date: state.currentPeriod.id,
+    p_voter_cookie: state.userId,
+    p_action: "like",
   });
-  if (insertError) throw insertError;
-
-  const { data: song, error: songError } = await supabase
-    .from(supabaseConfig.tables.songs)
-    .select("likes_count")
-    .eq("id", songId)
-    .single();
-  if (songError) throw songError;
-
-  const { error: updateError } = await supabase
-    .from(supabaseConfig.tables.songs)
-    .update({ likes_count: Math.max(0, Number(song.likes_count ?? 0) + 1) })
-    .eq("id", songId);
-  if (updateError) throw updateError;
+  if (error) throw error;
 }
 
 async function unlikeSong(songId) {
-  const { error: deleteError } = await supabase
-    .from(supabaseConfig.tables.likes)
-    .delete()
-    .eq("song_id", songId)
-    .eq("user_id", state.userId)
-    .eq("playlist_date", state.currentPeriod.id);
-  if (deleteError) throw deleteError;
-
-  const { data: song, error: songError } = await supabase
-    .from(supabaseConfig.tables.songs)
-    .select("likes_count")
-    .eq("id", songId)
-    .single();
-  if (songError) throw songError;
-
-  const { error: updateError } = await supabase
-    .from(supabaseConfig.tables.songs)
-    .update({ likes_count: Math.max(0, Number(song.likes_count ?? 0) - 1) })
-    .eq("id", songId);
-  if (updateError) throw updateError;
+  const { error } = await supabase.rpc("toggle_song_like", {
+    p_song_id: songId,
+    p_playlist_date: state.currentPeriod.id,
+    p_voter_cookie: state.userId,
+    p_action: "unlike",
+  });
+  if (error) throw error;
 }
 
 function handlePaginationClick(event) {
@@ -351,6 +331,24 @@ function handlePaginationClick(event) {
   const nextPage = Number(button.dataset.page);
   if (!Number.isInteger(nextPage) || nextPage < 1) return;
   state.currentPage = nextPage;
+  render();
+  refs.pagination.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function handlePaginationJump(event) {
+  const form = event.target.closest("[data-page-jump-form]");
+  if (!form) return;
+  event.preventDefault();
+
+  const input = form.querySelector("[data-page-jump-input]");
+  const pageCount = Number(input?.max);
+  const requestedPage = Number(input?.value);
+  if (!Number.isInteger(requestedPage) || requestedPage < 1 || requestedPage > pageCount) {
+    input?.focus();
+    return;
+  }
+
+  state.currentPage = requestedPage;
   render();
   refs.pagination.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
@@ -397,7 +395,7 @@ function renderPeriodStatus() {
   if (!state.backendReady) return;
 
   if (!state.currentPeriod) {
-    refs.targetDateLabel.textContent = "暂无开放征集期";
+    updateHeroPeriodLabel("暂无开放征集期", "");
     refs.authStatus.textContent = "未开放";
     refs.authStatus.style.color = "var(--danger)";
     refs.submissionPeriodCard.classList.remove("is-active", "is-public");
@@ -408,7 +406,7 @@ function renderPeriodStatus() {
     return;
   }
 
-  refs.targetDateLabel.textContent = `${state.currentPeriod.title} | ${formatPeriodRange(state.currentPeriod)}`;
+  updateHeroPeriodLabel(state.currentPeriod.title, formatPeriodRange(state.currentPeriod));
   refs.submissionPeriodTitle.textContent = state.currentPeriod.title;
   refs.submissionPeriodTime.textContent = `征集时间：${formatPeriodRange(state.currentPeriod)}`;
 
@@ -427,6 +425,12 @@ function renderPeriodStatus() {
     refs.submissionPeriodState.textContent = "已公示";
     updateFormHint("本期已停止投稿和点赞，可以继续浏览歌单结果。", false);
   }
+}
+
+function updateHeroPeriodLabel(title, time) {
+  refs.targetPeriodTitle.textContent = title;
+  refs.targetPeriodTime.textContent = time;
+  refs.targetDateLabel.classList.toggle("has-time", Boolean(time));
 }
 
 function getVisibleSongs() {
@@ -489,15 +493,53 @@ function createEmptyState(title, copy) {
 
 function createPagination(pageCount) {
   if (pageCount <= 1) return "";
-  const buttons = [];
-  for (let page = 1; page <= pageCount; page += 1) {
-    buttons.push(`
-      <button class="pagination-button ${page === state.currentPage ? "is-active" : ""}" type="button" data-page="${page}">
-        ${page}
+  const pageItems = getPaginationItems(pageCount, state.currentPage);
+  const buttons = pageItems.map((item) => {
+    if (item === "ellipsis") {
+      return `<span class="pagination-ellipsis" aria-hidden="true">...</span>`;
+    }
+    return `
+      <button class="pagination-button ${item === state.currentPage ? "is-active" : ""}" type="button" data-page="${item}">
+        ${item}
       </button>
-    `);
+    `;
+  });
+
+  return `
+    <div class="pagination-pages" aria-label="分页">
+      ${buttons.join("")}
+    </div>
+    <form class="pagination-jump" data-page-jump-form>
+      <label class="pagination-jump-label" for="pageJumpInput">跳转到</label>
+      <input id="pageJumpInput" data-page-jump-input type="number" min="1" max="${pageCount}" value="${state.currentPage}" inputmode="numeric" aria-label="输入页码" />
+      <span class="pagination-jump-total">/ ${pageCount} 页</span>
+      <button class="pagination-button pagination-jump-button" type="submit">前往</button>
+    </form>
+  `;
+}
+
+function getPaginationItems(pageCount, currentPage) {
+  if (pageCount <= 5) {
+    return Array.from({ length: pageCount }, (_, index) => index + 1);
   }
-  return buttons.join("");
+
+  const pages = new Set([1, pageCount, currentPage]);
+  if (currentPage <= 3) {
+    pages.add(2);
+    pages.add(3);
+  } else if (currentPage >= pageCount - 2) {
+    pages.add(pageCount - 2);
+    pages.add(pageCount - 1);
+  } else {
+    pages.add(currentPage - 1);
+    pages.add(currentPage + 1);
+  }
+
+  const sortedPages = [...pages].filter((page) => page >= 1 && page <= pageCount).sort((first, second) => first - second);
+  return sortedPages.flatMap((page, index) => {
+    const previousPage = sortedPages[index - 1];
+    return index > 0 && page - previousPage > 1 ? ["ellipsis", page] : [page];
+  });
 }
 
 function updateFormHint(message, isError) {
@@ -693,14 +735,17 @@ function renderHistorySongs(period) {
     return;
   }
   const songs = [...state.historySongs].sort(sortByLikes);
+  const previewSongs = songs.slice(0, HISTORY_PREVIEW_LIMIT);
+  const hiddenCount = Math.max(0, songs.length - previewSongs.length);
   refs.historySongsList.innerHTML = `
     <div class="history-readonly-label">只读歌单 · ${escapeHtml(period.title)}</div>
-    ${songs.map((song, index) => `
+    ${previewSongs.map((song, index) => `
       <div class="history-song-row">
         <span>${index + 1}. ${escapeHtml(song.title)} - ${escapeHtml(song.artist)}</span>
         <strong>${song.likesCount || 0} 喜欢</strong>
       </div>
     `).join("")}
+    ${hiddenCount ? `<div class="history-song-ellipsis">... 还有 ${hiddenCount} 首已收起，可在导出区获取完整歌单</div>` : ""}
   `;
 }
 
@@ -730,8 +775,7 @@ async function fetchAnnouncement() {
 
 function checkAndShowAnnouncement() {
   if (!state.currentAnnouncement) return;
-  const seenAnnouncementId = localStorage.getItem(ANNOUNCEMENT_SEEN_KEY);
-  if (seenAnnouncementId !== state.currentAnnouncement.id) showAnnouncementModal(state.currentAnnouncement);
+  showAnnouncementModal(state.currentAnnouncement);
 }
 
 function showAnnouncementModal(announcement) {
@@ -742,7 +786,6 @@ function showAnnouncementModal(announcement) {
 
 function closeAnnouncementModal() {
   refs.announcementModal.classList.add("hidden");
-  if (state.currentAnnouncement?.id) localStorage.setItem(ANNOUNCEMENT_SEEN_KEY, state.currentAnnouncement.id);
 }
 
 function loadCurrentAnnouncementToForm() {
@@ -982,15 +1025,35 @@ function mapSongs(data) {
 }
 
 function getOrCreateVisitorId() {
-  const storageKey = "chu_xiaomai_visitor_id";
-  const existingId = localStorage.getItem(storageKey);
+  const existingId = getCookieValue(VISITOR_COOKIE_NAME);
   if (existingId) return existingId;
+
+  const legacyId = localStorage.getItem(LEGACY_VISITOR_STORAGE_KEY);
   const nextId =
-    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    legacyId ||
+    (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
-      : `visitor_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-  localStorage.setItem(storageKey, nextId);
+      : `visitor_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
+  setVoterCookie(nextId);
+  if (getCookieValue(VISITOR_COOKIE_NAME) !== nextId) {
+    throw new Error("浏览器必须允许本站 Cookie 后才能投票，请关闭无痕/禁用 Cookie 模式后重试。");
+  }
+  localStorage.setItem(LEGACY_VISITOR_STORAGE_KEY, nextId);
   return nextId;
+}
+
+function getCookieValue(name) {
+  return document.cookie
+    .split(";")
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(`${name}=`))
+    ?.slice(name.length + 1) || "";
+}
+
+function setVoterCookie(value) {
+  const maxAge = 60 * 60 * 24 * 365;
+  const secureFlag = location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${VISITOR_COOKIE_NAME}=${encodeURIComponent(value)}; Max-Age=${maxAge}; Path=/; SameSite=Lax${secureFlag}`;
 }
 
 function normalizeText(value) {

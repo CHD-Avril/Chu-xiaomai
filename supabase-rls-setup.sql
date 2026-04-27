@@ -25,6 +25,8 @@ create table if not exists public.song_likes (
   id uuid primary key default gen_random_uuid(),
   song_id uuid not null references public.songs(id) on delete cascade,
   user_id text not null,
+  voter_cookie text,
+  voter_ip text,
   playlist_date text not null,
   created_at timestamptz not null default now(),
   unique (song_id, user_id, playlist_date)
@@ -46,6 +48,13 @@ create index if not exists songs_playlist_date_idx on public.songs (playlist_dat
 create index if not exists songs_title_lower_idx on public.songs (title_lower);
 create index if not exists songs_artist_lower_idx on public.songs (artist_lower);
 create index if not exists song_likes_user_playlist_idx on public.song_likes (user_id, playlist_date);
+create index if not exists song_likes_cookie_playlist_idx on public.song_likes (voter_cookie, playlist_date);
+create unique index if not exists song_likes_song_cookie_unique
+on public.song_likes (song_id, playlist_date, voter_cookie)
+where voter_cookie is not null;
+create unique index if not exists song_likes_song_ip_unique
+on public.song_likes (song_id, playlist_date, voter_ip)
+where voter_ip is not null;
 create index if not exists announcements_is_active_idx on public.announcements (is_active);
 create index if not exists announcements_created_at_idx on public.announcements (created_at desc);
 
@@ -75,12 +84,13 @@ with check (true);
 
 -- 策略 3: 允许所有人更新歌曲（用于更新点赞数）
 drop policy if exists "songs_update_policy" on public.songs;
-create policy "songs_update_policy"
+drop policy if exists "songs_update_all" on public.songs;
+create policy "songs_update_block_direct_votes"
 on public.songs
 for update
 to anon
-using (true)
-with check (true);
+using (false)
+with check (false);
 
 -- 策略 4: 允许所有人删除歌曲（可选，根据需要开启）
 -- drop policy if exists "songs_delete_policy" on public.songs;
@@ -108,19 +118,21 @@ using (true);
 
 -- 策略 2: 允许所有人插入点赞记录
 drop policy if exists "likes_insert_policy" on public.song_likes;
-create policy "likes_insert_policy"
+drop policy if exists "likes_insert_all" on public.song_likes;
+create policy "likes_insert_block_direct_votes"
 on public.song_likes
 for insert
 to anon
-with check (true);
+with check (false);
 
 -- 策略 3: 允许所有人删除自己的点赞记录
 drop policy if exists "likes_delete_policy" on public.song_likes;
-create policy "likes_delete_policy"
+drop policy if exists "likes_delete_all" on public.song_likes;
+create policy "likes_delete_block_direct_votes"
 on public.song_likes
 for delete
 to anon
-using (true);
+using (false);
 
 -- 策略 4: 不允许更新点赞记录（点赞记录创建后不应修改）
 -- 不创建 update 策略

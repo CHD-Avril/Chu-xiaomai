@@ -27,6 +27,7 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
+  overflow-x: hidden;
   color: var(--text);
   font-family: "Manrope", "Noto Sans SC", sans-serif;
   background:
@@ -289,6 +290,25 @@ a {
   font-weight: 800;
   background: rgba(255, 255, 255, 0.84);
   box-shadow: var(--shadow-soft);
+}
+
+.period-pill {
+  gap: 16px;
+  justify-content: space-between;
+  min-width: min(520px, 100%);
+  border-radius: 8px;
+}
+
+.period-pill span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.period-pill span:last-child {
+  flex: 0 0 auto;
+  color: #0a2b57;
 }
 
 .hero-visual {
@@ -869,6 +889,14 @@ a {
   white-space: nowrap;
 }
 
+.history-song-ellipsis {
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-align: center;
+}
+
 .notice {
   margin-bottom: 18px;
   padding: 14px 16px;
@@ -1012,10 +1040,19 @@ a {
 
 .pagination {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   gap: 10px;
   margin-top: 20px;
+}
+
+.pagination-pages,
+.pagination-jump {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
 }
 
 .pagination-button {
@@ -1040,9 +1077,156 @@ a {
   background: rgba(255, 255, 255, 0.72);
 }
 
+.pagination-ellipsis {
+  min-width: 28px;
+  color: var(--muted);
+  font-weight: 900;
+  text-align: center;
+}
+
+.pagination-jump {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.pagination-jump input {
+  width: 88px;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font-weight: 900;
+  text-align: center;
+  outline: none;
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.pagination-jump input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 4px rgba(21, 88, 207, 0.1);
+}
+
+.pagination-jump-button {
+  min-width: 64px;
+}
+
 .site-footer {
   color: #fff;
   background: linear-gradient(135deg, #0648b4, #0d5dd6);
+}
+
+.history-page {
+  display: grid;
+  gap: 20px;
+  margin-top: 34px;
+}
+
+.history-hero,
+.history-browser {
+  padding: 34px;
+}
+
+.history-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: center;
+}
+
+.history-hero h1 {
+  margin: 0;
+  font-size: clamp(2.4rem, 5vw, 4.2rem);
+  line-height: 1.08;
+  font-weight: 900;
+}
+
+.history-hero p:not(.section-tag) {
+  max-width: 58ch;
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-weight: 700;
+  line-height: 1.8;
+}
+
+.history-period-field {
+  margin-bottom: 18px;
+}
+
+.history-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin-bottom: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--line);
+}
+
+.history-summary .stat-card {
+  min-height: 82px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.readonly-songs-list {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.readonly-table-header,
+.readonly-song-row {
+  display: grid;
+  grid-template-columns: 64px minmax(180px, 1.35fr) minmax(140px, 1fr) 96px;
+  align-items: center;
+}
+
+.readonly-table-header {
+  min-height: 42px;
+  color: #708097;
+  font-size: 0.8rem;
+  font-weight: 900;
+  background: #eef4ff;
+}
+
+.readonly-song-row {
+  min-height: 62px;
+  border-top: 1px solid rgba(14, 57, 116, 0.09);
+  animation: rise-in 0.22s ease;
+}
+
+.readonly-table-header span,
+.readonly-song-row .song-index,
+.readonly-song-row .song-title,
+.readonly-song-row .song-artist,
+.readonly-song-row .song-like-count {
+  min-width: 0;
+  height: 100%;
+  padding: 0 12px;
+  border-right: 1px solid rgba(14, 57, 116, 0.08);
+}
+
+.readonly-table-header span,
+.readonly-song-row .song-index,
+.readonly-song-row .song-like-count {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.readonly-song-row .song-title,
+.readonly-song-row .song-artist {
+  display: flex;
+  align-items: center;
+}
+
+.readonly-table-header span:last-child,
+.readonly-song-row .song-like-count {
+  border-right: 0;
 }
 
 .footer-inner {
@@ -1338,5 +1522,505 @@ a {
   .songs-table-header,
   .song-card {
     grid-template-columns: 38px minmax(0, 1fr) minmax(0, 0.78fr) 48px 64px;
+  }
+}
+
+@media (max-width: 720px) {
+  html {
+    scroll-padding-top: 14px;
+  }
+
+  .page-shell {
+    width: min(calc(100% - 20px), var(--content-width));
+    padding-top: 14px;
+    padding-bottom: 28px;
+  }
+
+  .site-header {
+    align-items: stretch;
+  }
+
+  .brand {
+    min-width: 0;
+  }
+
+  .brand > span:last-child {
+    min-width: 0;
+  }
+
+  .brand strong,
+  .brand small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .site-nav {
+    margin: 0 -10px;
+    padding: 4px 10px 8px;
+    gap: 8px;
+    scrollbar-width: none;
+  }
+
+  .site-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .site-nav a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    min-height: 38px;
+    padding: 0 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.82);
+  }
+
+  .site-nav a::after {
+    display: none;
+  }
+
+  .hero {
+    gap: 14px;
+    padding: 24px 0 10px;
+  }
+
+  .hero-copy {
+    padding-left: 0;
+  }
+
+  .eyebrow,
+  .section-tag {
+    margin-bottom: 8px;
+    font-size: 0.82rem;
+  }
+
+  .hero h1 {
+    font-size: 2.55rem;
+    line-height: 1.08;
+  }
+
+  .hero-text {
+    margin-top: 16px;
+    font-size: 1rem;
+    line-height: 1.7;
+  }
+
+  .hero-actions {
+    margin-top: 20px;
+  }
+
+  .period-pill {
+    align-items: flex-start;
+    min-width: 0;
+    border-radius: 8px;
+  }
+
+  .period-pill.has-time {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .period-pill span:last-child {
+    color: var(--muted);
+    font-size: 0.84rem;
+  }
+
+  .hero-visual {
+    min-height: 190px;
+  }
+
+  .hero-visual::before {
+    inset: 18px 10px 0;
+  }
+
+  .record {
+    top: 12px;
+    left: 20px;
+    width: 150px;
+  }
+
+  .wave-bars {
+    right: 12px;
+    bottom: 42px;
+    transform: scale(0.66);
+    transform-origin: right center;
+  }
+
+  .orbit-one,
+  .orbit-two,
+  .dot {
+    opacity: 0.68;
+  }
+
+  .feature-strip {
+    margin-top: 8px;
+  }
+
+  .feature-strip article,
+  .stat-card {
+    min-height: auto;
+    padding: 16px;
+  }
+
+  .content-grid,
+  .list-panel,
+  .admin-panel {
+    margin-top: 14px;
+  }
+
+  .method-card,
+  .form-panel,
+  .list-panel,
+  .admin-panel {
+    padding: 18px;
+  }
+
+  .section-head {
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .section-note {
+    max-width: none;
+    font-size: 0.92rem;
+  }
+
+  .timeline {
+    gap: 12px;
+  }
+
+  .timeline li {
+    grid-template-columns: 42px minmax(0, 1fr);
+    padding: 14px 0;
+  }
+
+  .submission-period-card {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .song-form {
+    display: grid;
+    gap: 14px;
+  }
+
+  .field input,
+  .field select,
+  .field textarea,
+  .primary-button {
+    min-height: 48px;
+  }
+
+  .controls {
+    gap: 12px;
+  }
+
+  .songs-list {
+    gap: 12px;
+  }
+
+  .songs-table-header {
+    display: none;
+  }
+
+  .song-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "index title"
+      "index artist"
+      "meta action";
+    gap: 8px 12px;
+    min-height: 0;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .song-card:hover {
+    background: #fff;
+  }
+
+  .song-index,
+  .song-title,
+  .song-artist,
+  .song-like-count,
+  .song-card .like-button {
+    height: auto;
+    padding: 0;
+    border-right: 0;
+  }
+
+  .song-index {
+    grid-area: index;
+    align-self: start;
+    min-width: 42px;
+    min-height: 42px;
+    border-radius: 8px;
+    color: var(--blue);
+    background: rgba(21, 88, 207, 0.08);
+  }
+
+  .song-title {
+    grid-area: title;
+    align-items: flex-start;
+    min-height: 0;
+    font-size: 1.02rem;
+    line-height: 1.35;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .song-artist {
+    grid-area: artist;
+    min-height: 0;
+    font-size: 0.92rem;
+    line-height: 1.45;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .song-like-count {
+    grid-area: meta;
+    justify-content: flex-start;
+    min-height: 42px;
+    color: var(--muted);
+    font-size: 0.92rem;
+  }
+
+  .song-like-count::before {
+    content: "喜欢 ";
+    margin-right: 4px;
+    font-weight: 700;
+  }
+
+  .song-card .like-button {
+    grid-area: action;
+    justify-self: end;
+    min-width: 112px;
+    min-height: 42px;
+    padding: 0 14px;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 0.88rem;
+    background: var(--blue);
+  }
+
+  .song-card .like-button.is-liked {
+    color: var(--green);
+    background: rgba(22, 163, 106, 0.12);
+  }
+
+  .pagination-pages,
+  .pagination-jump {
+    gap: 8px;
+  }
+
+  .pagination-button {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0 12px;
+  }
+
+  .pagination-jump {
+    width: 100%;
+  }
+
+  .pagination-jump input {
+    width: 76px;
+  }
+
+  .admin-block {
+    padding: 16px;
+  }
+
+  .admin-actions {
+    display: grid;
+    gap: 10px;
+  }
+
+  .period-history-list,
+  .history-songs-list {
+    gap: 10px;
+  }
+
+  .history-song-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .history-song-row span {
+    white-space: normal;
+  }
+
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 10px;
+  }
+
+  .settings-modal,
+  .announcement-modal {
+    width: 100%;
+    max-height: 92vh;
+  }
+
+  .modal-header,
+  .admin-login-form,
+  .announcement-modal-body,
+  .modal-footer {
+    padding: 18px;
+  }
+
+  .modal-footer .primary-button {
+    width: 100%;
+  }
+
+  .history-page {
+    gap: 14px;
+    margin-top: 18px;
+  }
+
+  .history-hero,
+  .history-browser {
+    padding: 18px;
+  }
+
+  .history-hero,
+  .history-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .history-hero h1 {
+    font-size: 2.28rem;
+  }
+
+  .readonly-songs-list {
+    display: grid;
+    gap: 12px;
+    border: 0;
+    background: transparent;
+  }
+
+  .readonly-table-header {
+    display: none;
+  }
+
+  .readonly-song-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "index title"
+      "index artist"
+      "meta meta";
+    gap: 8px 12px;
+    min-height: 0;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .readonly-song-row .song-index,
+  .readonly-song-row .song-title,
+  .readonly-song-row .song-artist,
+  .readonly-song-row .song-like-count {
+    height: auto;
+    padding: 0;
+    border-right: 0;
+  }
+
+  .readonly-song-row .song-index {
+    grid-area: index;
+    align-self: start;
+    min-width: 42px;
+    min-height: 42px;
+    border-radius: 8px;
+    color: var(--blue);
+    background: rgba(21, 88, 207, 0.08);
+  }
+
+  .readonly-song-row .song-title {
+    grid-area: title;
+    font-size: 1.02rem;
+    line-height: 1.35;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .readonly-song-row .song-artist {
+    grid-area: artist;
+    color: var(--muted);
+    font-size: 0.92rem;
+    line-height: 1.45;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .readonly-song-row .song-like-count {
+    grid-area: meta;
+    justify-content: flex-start;
+    min-height: 34px;
+    color: var(--muted);
+    font-size: 0.92rem;
+  }
+
+  .site-footer {
+    margin-top: 10px;
+  }
+
+  .footer-inner {
+    gap: 14px;
+    padding: 18px 0;
+    text-align: center;
+  }
+}
+
+@media (max-width: 420px) {
+  .hero h1 {
+    font-size: 2.28rem;
+  }
+
+  .brand small {
+    max-width: 210px;
+  }
+
+  .song-card {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "index"
+      "title"
+      "artist"
+      "meta"
+      "action";
+  }
+
+  .song-index {
+    justify-self: start;
+  }
+
+  .song-card .like-button {
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  .readonly-song-row {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "index"
+      "title"
+      "artist"
+      "meta";
+  }
+
+  .readonly-song-row .song-index {
+    justify-self: start;
   }
 }
