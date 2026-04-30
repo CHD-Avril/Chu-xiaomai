@@ -96,6 +96,7 @@ const supabase = hasValidSupabaseConfig()
   ? createClient(supabaseConfig.url, supabaseConfig.anonKey)
   : null;
 
+setupRecommendationsPanel();
 updateHeroPeriodLabel("正在读取征集期", "");
 bindEvents();
 render();
@@ -428,7 +429,9 @@ function ensureRandomRecommendations() {
 }
 
 function renderRecommendations() {
+  if (!refs.recommendationsPanel || !refs.recommendationsList) setupRecommendationsPanel();
   if (!refs.recommendationsPanel || !refs.recommendationsList) return;
+  if (state.songs.length && !state.recommendedSongIds.length) ensureRandomRecommendations();
 
   const recommendations = state.recommendedSongIds
     .map((songId) => state.songs.find((song) => song.id === songId))
@@ -438,6 +441,31 @@ function renderRecommendations() {
   refs.recommendationsList.innerHTML = recommendations
     .map((song, index) => createRecommendationCard(song, index + 1))
     .join("");
+}
+
+function setupRecommendationsPanel() {
+  if (refs.recommendationsPanel && refs.recommendationsList) return;
+
+  const playlistPanel = document.querySelector("#playlist");
+  if (!playlistPanel) return;
+
+  const panel = document.createElement("section");
+  panel.className = "card recommendations-panel hidden";
+  panel.id = "recommendationsPanel";
+  panel.innerHTML = `
+    <div class="section-head">
+      <div>
+        <p class="section-tag">Random Picks</p>
+        <h2>随机推荐</h2>
+      </div>
+      <p class="section-note">每次进入页面，从已投稿歌单中随机抽取至多五首，不按喜欢数量排序。</p>
+    </div>
+    <div class="recommendations-list" id="recommendationsList"></div>
+  `;
+
+  playlistPanel.before(panel);
+  refs.recommendationsPanel = panel;
+  refs.recommendationsList = panel.querySelector("#recommendationsList");
 }
 
 function shuffleSongs(songs) {
