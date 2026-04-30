@@ -585,7 +585,7 @@ function createRecommendationCard(song, rank) {
         <strong title="${escapeHtml(song.title)}">${escapeHtml(song.title)}</strong>
         <span title="${escapeHtml(song.artist)}">${escapeHtml(song.artist)}</span>
       </div>
-      <small>${song.likesCount || 0} 喜欢</small>
+      <small><span aria-hidden="true">♥</span>${song.likesCount || 0} 喜欢</small>
     </article>
   `;
 }
