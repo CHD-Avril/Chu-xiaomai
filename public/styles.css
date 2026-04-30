@@ -680,6 +680,7 @@ a {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 12px;
+  align-items: start;
   width: 100%;
   min-height: 118px;
   padding: 14px 14px 13px;
@@ -714,6 +715,7 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   width: 34px;
   height: 34px;
   border-radius: 8px;
@@ -736,7 +738,9 @@ a {
 
 .notice-board-title-row {
   display: grid;
-  gap: 5px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 12px;
 }
 
 .notice-board-item strong {
@@ -751,6 +755,7 @@ a {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .notice-board-item p {
