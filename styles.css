@@ -571,7 +571,8 @@ a {
 }
 
 .list-panel,
-.admin-panel {
+.admin-panel,
+.recommendations-panel {
   margin-top: 20px;
 }
 
@@ -1029,6 +1030,82 @@ a {
   color: var(--danger);
   line-height: 1.65;
   background: rgba(216, 59, 46, 0.08);
+}
+
+.recommendations-panel {
+  padding: 28px 34px 32px;
+}
+
+.recommendations-panel .section-head {
+  align-items: center;
+}
+
+.recommendations-panel .section-note {
+  max-width: 34ch;
+  text-align: right;
+}
+
+.recommendations-list {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.recommendation-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  min-height: 104px;
+  padding: 14px;
+  border: 1px solid rgba(21, 88, 207, 0.12);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 251, 255, 0.92)),
+    #fff;
+}
+
+.recommendation-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: #0b2b57;
+  font-size: 0.78rem;
+  font-weight: 900;
+  background: var(--yellow);
+}
+
+.recommendation-main {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-width: 0;
+}
+
+.recommendation-main strong,
+.recommendation-main span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recommendation-main strong {
+  font-size: 0.96rem;
+  line-height: 1.3;
+}
+
+.recommendation-main span,
+.recommendation-card small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.recommendation-card small {
+  grid-column: 2;
+  font-size: 0.78rem;
 }
 
 .hidden {
@@ -1582,12 +1659,26 @@ a {
   .method-card,
   .form-panel,
   .list-panel,
-  .admin-panel {
+  .admin-panel,
+  .recommendations-panel {
     padding: 24px;
   }
 
   .section-head {
     display: grid;
+  }
+
+  .recommendations-panel .section-head {
+    align-items: start;
+  }
+
+  .recommendations-panel .section-note {
+    max-width: none;
+    text-align: left;
+  }
+
+  .recommendations-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .submission-period-card {
@@ -1646,6 +1737,10 @@ a {
   .songs-table-header,
   .song-card {
     grid-template-columns: 38px minmax(0, 1fr) minmax(0, 0.78fr) 48px 64px;
+  }
+
+  .recommendations-list {
+    grid-template-columns: 1fr;
   }
 }
 

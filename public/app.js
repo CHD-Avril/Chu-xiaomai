@@ -2,6 +2,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { supabaseConfig, hasValidSupabaseConfig } from "./supabase-config.js";
 
 const SONGS_PER_PAGE = 12;
+const RANDOM_RECOMMENDATION_LIMIT = 5;
 const HISTORY_PREVIEW_LIMIT = 6;
 const ADMIN_USERNAME = "CHU_CBS_XIAOMAI";
 const ADMIN_PASSWORD = "GBT666";
@@ -12,6 +13,8 @@ const LEGACY_VISITOR_STORAGE_KEY = "chu_xiaomai_visitor_id";
 const state = {
   userId: "",
   songs: [],
+  recommendedSongIds: [],
+  recommendationPeriodId: "",
   likedSongIds: new Set(),
   periods: [],
   currentPeriod: null,
@@ -48,6 +51,8 @@ const refs = {
   searchInput: document.querySelector("#searchInput"),
   sortSelect: document.querySelector("#sortSelect"),
   songsList: document.querySelector("#songsList"),
+  recommendationsPanel: document.querySelector("#recommendationsPanel"),
+  recommendationsList: document.querySelector("#recommendationsList"),
   pagination: document.querySelector("#pagination"),
   settingsOpenBtn: document.querySelector("#settingsOpenBtn"),
   settingsModal: document.querySelector("#settingsModal"),
@@ -182,6 +187,8 @@ async function syncPeriods() {
   state.currentPeriod = state.periods.find((period) => period.status === "active") ?? null;
   if (!state.currentPeriod) {
     state.songs = [];
+    state.recommendedSongIds = [];
+    state.recommendationPeriodId = "";
     state.likedSongIds = new Set();
   }
   renderPeriodAdminState();
@@ -191,6 +198,8 @@ async function syncPeriods() {
 async function syncAllData() {
   if (!state.backendReady || !state.currentPeriod) {
     state.songs = [];
+    state.recommendedSongIds = [];
+    state.recommendationPeriodId = "";
     state.likedSongIds = new Set();
     render();
     return;
@@ -198,6 +207,7 @@ async function syncAllData() {
 
   const [songs, likes] = await Promise.all([fetchSongs(state.currentPeriod.id), fetchLikes()]);
   state.songs = songs;
+  ensureRandomRecommendations();
   state.likedSongIds = new Set(likes.map((item) => item.song_id));
   render();
 }
@@ -368,6 +378,7 @@ function render() {
   refs.songCount.textContent = String(state.songs.length);
   refs.likeCount.textContent = String(state.songs.reduce((sum, song) => sum + (song.likesCount || 0), 0));
   renderPeriodStatus();
+  renderRecommendations();
   syncFormButton();
 
   if (!currentSongs.length) {
@@ -393,6 +404,58 @@ function render() {
   }
 
   refs.pagination.innerHTML = createPagination(pageCount);
+}
+
+function ensureRandomRecommendations() {
+  const periodId = state.currentPeriod?.id ?? "";
+  if (!state.songs.length || !periodId) {
+    state.recommendedSongIds = [];
+    state.recommendationPeriodId = periodId;
+    return;
+  }
+
+  const currentIds = new Set(state.songs.map((song) => song.id));
+  const stillAvailableIds = state.recommendedSongIds.filter((songId) => currentIds.has(songId));
+  if (state.recommendationPeriodId === periodId && stillAvailableIds.length) {
+    state.recommendedSongIds = stillAvailableIds;
+    return;
+  }
+
+  state.recommendationPeriodId = periodId;
+  state.recommendedSongIds = shuffleSongs(state.songs)
+    .slice(0, RANDOM_RECOMMENDATION_LIMIT)
+    .map((song) => song.id);
+}
+
+function renderRecommendations() {
+  if (!refs.recommendationsPanel || !refs.recommendationsList) return;
+
+  const recommendations = state.recommendedSongIds
+    .map((songId) => state.songs.find((song) => song.id === songId))
+    .filter(Boolean);
+
+  refs.recommendationsPanel.classList.toggle("hidden", recommendations.length === 0);
+  refs.recommendationsList.innerHTML = recommendations
+    .map((song, index) => createRecommendationCard(song, index + 1))
+    .join("");
+}
+
+function shuffleSongs(songs) {
+  const shuffledSongs = [...songs];
+  for (let index = shuffledSongs.length - 1; index > 0; index -= 1) {
+    const swapIndex = getRandomIndex(index + 1);
+    [shuffledSongs[index], shuffledSongs[swapIndex]] = [shuffledSongs[swapIndex], shuffledSongs[index]];
+  }
+  return shuffledSongs;
+}
+
+function getRandomIndex(max) {
+  if (window.crypto?.getRandomValues) {
+    const values = new Uint32Array(1);
+    window.crypto.getRandomValues(values);
+    return values[0] % max;
+  }
+  return Math.floor(Math.random() * max);
 }
 
 function renderPeriodStatus() {
@@ -482,6 +545,19 @@ function createSongCard(song, rank) {
       >
         ${likeLabel}
       </button>
+    </article>
+  `;
+}
+
+function createRecommendationCard(song, rank) {
+  return `
+    <article class="recommendation-card">
+      <span class="recommendation-rank">${String(rank).padStart(2, "0")}</span>
+      <div class="recommendation-main">
+        <strong title="${escapeHtml(song.title)}">${escapeHtml(song.title)}</strong>
+        <span title="${escapeHtml(song.artist)}">${escapeHtml(song.artist)}</span>
+      </div>
+      <small>${song.likesCount || 0} 喜欢</small>
     </article>
   `;
 }
@@ -663,6 +739,8 @@ async function handleArchiveCurrentPeriod() {
     const archivedId = state.currentPeriod.id;
     state.currentPeriod = null;
     state.songs = [];
+    state.recommendedSongIds = [];
+    state.recommendationPeriodId = "";
     state.likedSongIds = new Set();
     await syncPeriods();
     await syncAllData();
