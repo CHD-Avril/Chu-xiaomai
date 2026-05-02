@@ -8,10 +8,28 @@ create extension if not exists pgcrypto;
 -- ---------------------------------------------------------------------
 
 create table if not exists public.admin_users (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  email text,
+  email text primary key,
+  user_id uuid unique references auth.users(id) on delete set null,
   created_at timestamptz not null default now()
 );
+
+alter table public.admin_users
+  add column if not exists user_id uuid references auth.users(id) on delete set null;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'admin_users'
+      and column_name = 'email'
+      and is_nullable = 'YES'
+  ) then
+    alter table public.admin_users alter column email set not null;
+  end if;
+end;
+$$;
 
 create table if not exists public.security_settings (
   id boolean primary key default true check (id),
@@ -265,8 +283,22 @@ as $$
     and exists (
       select 1
       from public.admin_users admin_user
-      where admin_user.user_id = auth.uid()
+      where lower(admin_user.email) = lower(auth.email())
     );
+$$;
+
+create or replace function public.is_admin_email_allowed(p_email text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.admin_users admin_user
+    where lower(admin_user.email) = lower(nullif(btrim(p_email), ''))
+  );
 $$;
 
 create or replace function public.request_client_ip()
@@ -716,6 +748,7 @@ grant select, insert, update, delete on public.admin_users to authenticated;
 grant select, update on public.security_settings to authenticated;
 
 revoke all on function public.is_current_user_admin() from public;
+revoke all on function public.is_admin_email_allowed(text) from public;
 revoke all on function public.request_client_ip() from public;
 revoke all on function public.assert_valid_voter_cookie(text) from public;
 revoke all on function public.record_rate_limited_attempt(text, text, text, text) from public;
@@ -724,6 +757,7 @@ revoke all on function public.toggle_song_like(uuid, text, text, text) from publ
 revoke all on function public.submit_song(text, text, text, text) from public;
 
 grant execute on function public.is_current_user_admin() to anon, authenticated;
+grant execute on function public.is_admin_email_allowed(text) to anon, authenticated;
 grant execute on function public.get_my_likes(text, text) to anon, authenticated;
 grant execute on function public.toggle_song_like(uuid, text, text, text) to anon, authenticated;
 grant execute on function public.submit_song(text, text, text, text) to anon, authenticated;
@@ -822,11 +856,10 @@ using (public.is_current_user_admin());
 -- ---------------------------------------------------------------------
 -- Admin bootstrap helper
 -- ---------------------------------------------------------------------
--- 1. Create the admin account in Supabase Dashboard > Authentication.
--- 2. Then run this, replacing the email:
+-- Run this with the email you want to authorize. The user does not need to be
+-- pre-created in Supabase Auth; they will verify the email through the login
+-- link sent by the frontend.
 --
--- insert into public.admin_users (user_id, email)
--- select id, email
--- from auth.users
--- where email = 'admin@example.com'
--- on conflict (user_id) do update set email = excluded.email;
+-- insert into public.admin_users (email)
+-- values ('admin@example.com')
+-- on conflict (email) do nothing;
