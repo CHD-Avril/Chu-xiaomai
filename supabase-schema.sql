@@ -18,6 +18,15 @@ alter table public.admin_users
 
 do $$
 begin
+  update public.admin_users admin_user
+  set email = auth_user.email
+  from auth.users auth_user
+  where admin_user.user_id = auth_user.id
+    and admin_user.email is null;
+
+  delete from public.admin_users
+  where email is null;
+
   if exists (
     select 1
     from information_schema.columns
@@ -30,6 +39,13 @@ begin
   end if;
 end;
 $$;
+
+create unique index if not exists admin_users_email_unique
+on public.admin_users (email);
+
+create unique index if not exists admin_users_user_id_unique
+on public.admin_users (user_id)
+where user_id is not null;
 
 create table if not exists public.security_settings (
   id boolean primary key default true check (id),
@@ -856,10 +872,98 @@ using (public.is_current_user_admin());
 -- ---------------------------------------------------------------------
 -- Admin bootstrap helper
 -- ---------------------------------------------------------------------
--- Run this with the email you want to authorize. The user does not need to be
--- pre-created in Supabase Auth; they will verify the email through the login
--- link sent by the frontend.
+-- Admin bootstrap helper.
+-- Replace the email/password and run it in SQL Editor to create or update a
+-- password-based Supabase Auth user and grant admin access.
 --
--- insert into public.admin_users (email)
--- values ('admin@example.com')
--- on conflict (email) do nothing;
+-- do $$
+-- declare
+--   admin_email text := 'admin@example.com';
+--   admin_password text := 'ChangeMe_123456';
+--   admin_user_id uuid;
+-- begin
+--   if length(admin_password) < 8 then
+--     raise exception 'Admin password must be at least 8 characters.';
+--   end if;
+--
+--   select id
+--   into admin_user_id
+--   from auth.users
+--   where lower(email) = lower(admin_email)
+--   limit 1;
+--
+--   if admin_user_id is null then
+--     admin_user_id := gen_random_uuid();
+--
+--     insert into auth.users (
+--       instance_id,
+--       id,
+--       aud,
+--       role,
+--       email,
+--       encrypted_password,
+--       email_confirmed_at,
+--       created_at,
+--       updated_at,
+--       raw_app_meta_data,
+--       raw_user_meta_data,
+--       is_super_admin,
+--       confirmation_token,
+--       email_change,
+--       email_change_token_new,
+--       recovery_token
+--     )
+--     values (
+--       '00000000-0000-0000-0000-000000000000',
+--       admin_user_id,
+--       'authenticated',
+--       'authenticated',
+--       admin_email,
+--       crypt(admin_password, gen_salt('bf')),
+--       now(),
+--       now(),
+--       now(),
+--       '{"provider":"email","providers":["email"]}'::jsonb,
+--       '{}'::jsonb,
+--       false,
+--       '',
+--       '',
+--       '',
+--       ''
+--     );
+--
+--     insert into auth.identities (
+--       id,
+--       user_id,
+--       provider_id,
+--       identity_data,
+--       provider,
+--       last_sign_in_at,
+--       created_at,
+--       updated_at
+--     )
+--     values (
+--       admin_user_id::text,
+--       admin_user_id,
+--       admin_user_id::text,
+--       jsonb_build_object('sub', admin_user_id::text, 'email', admin_email),
+--       'email',
+--       now(),
+--       now(),
+--       now()
+--     )
+--     on conflict do nothing;
+--   else
+--     update auth.users
+--     set encrypted_password = crypt(admin_password, gen_salt('bf')),
+--         email_confirmed_at = coalesce(email_confirmed_at, now()),
+--         updated_at = now()
+--     where id = admin_user_id;
+--   end if;
+--
+--   insert into public.admin_users (email, user_id)
+--   values (admin_email, admin_user_id)
+--   on conflict (email) do update
+--   set user_id = excluded.user_id;
+-- end;
+-- $$;

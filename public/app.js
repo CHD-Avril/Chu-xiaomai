@@ -58,6 +58,7 @@ const refs = {
   settingsCloseBtn: document.querySelector("#settingsCloseBtn"),
   adminLoginForm: document.querySelector("#adminLoginForm"),
   adminUsername: document.querySelector("#adminUsername"),
+  adminPassword: document.querySelector("#adminPassword"),
   adminLoginHint: document.querySelector("#adminLoginHint"),
   adminPanel: document.querySelector("#adminPanel"),
   adminLogoutBtn: document.querySelector("#adminLogoutBtn"),
@@ -741,8 +742,9 @@ async function handleAdminLogin(event) {
   }
 
   const email = refs.adminUsername.value.trim();
+  const password = refs.adminPassword.value;
 
-  refs.adminLoginHint.textContent = "正在发送登录邮件...";
+  refs.adminLoginHint.textContent = "正在登录...";
   refs.adminLoginHint.style.color = "var(--muted)";
 
   try {
@@ -756,20 +758,26 @@ async function handleAdminLogin(event) {
       return;
     }
 
-    const { error } = await supabase.auth.signInWithOtp({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
-      options: {
-        emailRedirectTo: window.location.href,
-        shouldCreateUser: true,
-      },
+      password,
     });
     if (error) throw error;
 
-    refs.adminLoginHint.textContent = "登录邮件已发送，请打开邮箱完成验证。";
-    refs.adminLoginHint.style.color = "var(--muted)";
+    const isAdmin = await syncAdminSession(data.session);
+    if (!isAdmin) {
+      refs.adminLoginHint.textContent = "这个邮箱未被授权为管理员。";
+      refs.adminLoginHint.style.color = "var(--danger)";
+      return;
+    }
+
+    refs.adminLoginForm.reset();
+    refs.adminLoginHint.textContent = "";
+    closeSettingsModal();
+    refs.adminPanel.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
-    console.error("管理员登录邮件发送失败:", error);
-    refs.adminLoginHint.textContent = `发送失败：${resolveErrorMessage(error)}`;
+    console.error("管理员登录失败:", error);
+    refs.adminLoginHint.textContent = `登录失败：${resolveErrorMessage(error)}`;
     refs.adminLoginHint.style.color = "var(--danger)";
   }
 }
