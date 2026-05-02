@@ -4,8 +4,6 @@ import { supabaseConfig, hasValidSupabaseConfig } from "./supabase-config.js";
 const SONGS_PER_PAGE = 12;
 const RANDOM_RECOMMENDATION_LIMIT = 5;
 const HISTORY_PREVIEW_LIMIT = 6;
-const ADMIN_USERNAME = "CHU_CBS_XIAOMAI";
-const ADMIN_PASSWORD = "GBT666";
 const PERIODS_TABLE = "playlist_periods";
 const VISITOR_COOKIE_NAME = "chu_xiaomai_voter_id";
 const LEGACY_VISITOR_STORAGE_KEY = "chu_xiaomai_visitor_id";
@@ -27,6 +25,7 @@ const state = {
   likingSongId: "",
   backendReady: false,
   isAdminAuthenticated: false,
+  adminUser: null,
   currentAnnouncement: null,
   announcements: [],
 };
@@ -93,8 +92,16 @@ const refs = {
 };
 
 const supabase = hasValidSupabaseConfig()
-  ? createClient(supabaseConfig.url, supabaseConfig.anonKey)
+  ? createClient(supabaseConfig.url, supabaseConfig.anonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    })
   : null;
+
+let authListenerBound = false;
 
 setupRecommendationsPanel();
 updateHeroPeriodLabel("正在读取征集期", "");
@@ -152,6 +159,11 @@ async function bootSupabase() {
     refs.authStatus.textContent = "已连接";
     refs.authStatus.style.color = "var(--blue)";
     syncFormButton();
+    bindAuthListener();
+    await syncAdminSession().catch((error) => {
+      console.warn("管理员登录态检查失败:", error);
+      setAdminUi(false);
+    });
     await syncPeriods();
     await syncAllData();
     await fetchAnnouncement();
@@ -179,7 +191,7 @@ function showBackendConfigError() {
 async function syncPeriods() {
   const { data, error } = await supabase
     .from(PERIODS_TABLE)
-    .select("*")
+    .select("id,title,starts_at,ends_at,status,created_at,updated_at,archived_at")
     .order("created_at", { ascending: false })
     .limit(100);
   if (error) throw error;
@@ -216,7 +228,7 @@ async function syncAllData() {
 async function fetchSongs(periodId) {
   const { data, error } = await supabase
     .from(supabaseConfig.tables.songs)
-    .select("*")
+    .select("id,title,artist,title_lower,artist_lower,playlist_date,likes_count,created_at")
     .eq("playlist_date", periodId)
     .limit(500);
   if (error) throw error;
@@ -225,12 +237,10 @@ async function fetchSongs(periodId) {
 
 async function fetchLikes() {
   if (!state.currentPeriod) return [];
-  const { data, error } = await supabase
-    .from(supabaseConfig.tables.likes)
-    .select("song_id")
-    .eq("playlist_date", state.currentPeriod.id)
-    .eq("voter_cookie", state.userId)
-    .limit(500);
+  const { data, error } = await supabase.rpc("get_my_likes", {
+    p_playlist_date: state.currentPeriod.id,
+    p_voter_cookie: state.userId,
+  });
   if (error) throw error;
   return data ?? [];
 }
@@ -266,14 +276,11 @@ async function handleSongSubmit(event) {
   updateFormHint("正在提交你的歌单...", false);
 
   try {
-    const { error } = await supabase.from(supabaseConfig.tables.songs).insert({
-      title,
-      artist,
-      title_lower: titleLower,
-      artist_lower: artistLower,
-      playlist_date: state.currentPeriod.id,
-      likes_count: 0,
-      created_by: state.userId,
+    const { error } = await supabase.rpc("submit_song", {
+      p_title: title,
+      p_artist: artist,
+      p_playlist_date: state.currentPeriod.id,
+      p_voter_cookie: state.userId,
     });
     if (error) throw error;
     refs.form.reset();
@@ -671,29 +678,106 @@ function closeSettingsModal() {
   refs.adminLoginHint.textContent = "";
 }
 
-function handleAdminLogin(event) {
+function bindAuthListener() {
+  if (authListenerBound || !supabase) return;
+  authListenerBound = true;
+  supabase.auth.onAuthStateChange((_event, session) => {
+    window.setTimeout(() => {
+      syncAdminSession(session).catch((error) => {
+        console.warn("管理员登录态同步失败:", error);
+        setAdminUi(false);
+      });
+    }, 0);
+  });
+}
+
+async function syncAdminSession(sessionOverride) {
+  if (!supabase) {
+    setAdminUi(false);
+    return false;
+  }
+
+  let session = sessionOverride;
+  if (arguments.length === 0) {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    session = data.session;
+  }
+
+  if (!session?.user) {
+    setAdminUi(false);
+    return false;
+  }
+
+  const { data: isAdmin, error } = await supabase.rpc("is_current_user_admin");
+  if (error) throw error;
+
+  if (isAdmin !== true) {
+    await supabase.auth.signOut();
+    setAdminUi(false);
+    return false;
+  }
+
+  setAdminUi(true, session.user);
+  return true;
+}
+
+function setAdminUi(isAuthenticated, user = null) {
+  state.isAdminAuthenticated = Boolean(isAuthenticated);
+  state.adminUser = isAuthenticated ? user : null;
+  refs.adminPanel.classList.toggle("hidden", !state.isAdminAuthenticated);
+
+  if (!state.isAdminAuthenticated) return;
+  renderPeriodAdminState();
+  renderHistoryList();
+  loadCurrentAnnouncementToForm();
+}
+
+async function handleAdminLogin(event) {
   event.preventDefault();
-  const username = refs.adminUsername.value.trim();
+  if (!supabase) {
+    refs.adminLoginHint.textContent = "Supabase 尚未配置，无法登录。";
+    refs.adminLoginHint.style.color = "var(--danger)";
+    return;
+  }
+
+  const email = refs.adminUsername.value.trim();
   const password = refs.adminPassword.value;
-  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-    state.isAdminAuthenticated = true;
-    refs.adminPanel.classList.remove("hidden");
+
+  refs.adminLoginHint.textContent = "正在登录...";
+  refs.adminLoginHint.style.color = "var(--muted)";
+
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) throw error;
+
+    const isAdmin = await syncAdminSession(data.session);
+    if (!isAdmin) {
+      refs.adminLoginHint.textContent = "这个邮箱未被授权为管理员。";
+      refs.adminLoginHint.style.color = "var(--danger)";
+      return;
+    }
+
     refs.adminLoginForm.reset();
     refs.adminLoginHint.textContent = "";
     closeSettingsModal();
-    renderPeriodAdminState();
-    renderHistoryList();
-    loadCurrentAnnouncementToForm();
     refs.adminPanel.scrollIntoView({ behavior: "smooth", block: "start" });
-    return;
+  } catch (error) {
+    console.error("管理员登录失败:", error);
+    refs.adminLoginHint.textContent = `登录失败：${resolveErrorMessage(error)}`;
+    refs.adminLoginHint.style.color = "var(--danger)";
   }
-  refs.adminLoginHint.textContent = "账号或密码不正确。";
-  refs.adminLoginHint.style.color = "var(--danger)";
 }
 
-function handleAdminLogout() {
-  state.isAdminAuthenticated = false;
-  refs.adminPanel.classList.add("hidden");
+async function handleAdminLogout() {
+  if (supabase) {
+    const { error } = await supabase.auth.signOut();
+    if (error) console.warn("管理员退出失败:", error);
+  }
+  setAdminUi(false);
   refs.adminLoginForm.reset();
 }
 
@@ -719,7 +803,12 @@ async function handlePeriodSubmit(event) {
   refs.savePeriodBtn.disabled = true;
   updatePeriodHint("正在保存征集期...", false);
   try {
-    await supabase.from(PERIODS_TABLE).update({ status: "archived", updated_at: new Date().toISOString() }).eq("status", "active");
+    const { error: archiveError } = await supabase
+      .from(PERIODS_TABLE)
+      .update({ status: "archived", updated_at: new Date().toISOString() })
+      .eq("status", "active");
+    if (archiveError) throw archiveError;
+
     const payload = {
       title,
       starts_at: startsAt.toISOString(),
@@ -731,7 +820,7 @@ async function handlePeriodSubmit(event) {
       ? await supabase.from(PERIODS_TABLE).update(payload).eq("id", state.currentPeriod.id)
       : await supabase.from(PERIODS_TABLE).insert({
           ...payload,
-          created_by: state.userId || ADMIN_USERNAME,
+          created_by: state.adminUser?.id,
         });
     if (error) throw error;
     await syncPeriods();
@@ -869,7 +958,7 @@ async function fetchAnnouncement() {
   try {
     const { data, error } = await supabase
       .from(tableName)
-      .select("*")
+      .select("id,title,content,is_active,created_at,updated_at")
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(3);
@@ -971,7 +1060,7 @@ async function handleAnnouncementSubmit(event) {
       title,
       content,
       is_active: true,
-      created_by: state.userId,
+      created_by: state.adminUser?.id,
     });
     if (error) throw error;
     await fetchAnnouncement();

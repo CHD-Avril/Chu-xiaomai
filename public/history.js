@@ -60,7 +60,7 @@ async function bootHistoryPage() {
 async function fetchArchivedPeriods() {
   const { data, error } = await supabase
     .from(PERIODS_TABLE)
-    .select("*")
+    .select("id,title,starts_at,ends_at,status,created_at,archived_at")
     .eq("status", "archived")
     .order("archived_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
@@ -92,7 +92,7 @@ async function loadPeriodSongs(periodId) {
 
   const { data, error } = await supabase
     .from(supabaseConfig.tables.songs)
-    .select("*")
+    .select("id,title,artist,playlist_date,likes_count,created_at")
     .eq("playlist_date", periodId)
     .limit(500);
 
