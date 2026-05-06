@@ -2,7 +2,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { supabaseConfig, hasValidSupabaseConfig } from "./supabase-config.js";
 
 const SONGS_PER_PAGE = 12;
-const RANDOM_RECOMMENDATION_LIMIT = 5;
+const DAILY_RECOMMENDATION_LIMIT = 5;
 const HISTORY_PREVIEW_LIMIT = 6;
 const PERIODS_TABLE = "playlist_periods";
 const VISITOR_COOKIE_NAME = "chu_xiaomai_voter_id";
@@ -13,6 +13,7 @@ const state = {
   songs: [],
   recommendedSongIds: [],
   recommendationPeriodId: "",
+  recommendationDateKey: "",
   likedSongIds: new Set(),
   periods: [],
   currentPeriod: null,
@@ -194,7 +195,14 @@ function setActivePage(page, options = {}) {
 
   refs.navLinks.forEach((link) => {
     const linkPage = getPageFromHref(link.getAttribute("href") || "");
-    if (linkPage) link.classList.toggle("is-active", linkPage === nextPage);
+    if (!linkPage) return;
+    const isActive = linkPage === nextPage;
+    link.classList.toggle("is-active", isActive);
+    if (isActive) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
   });
 
   if (updateHash) {
@@ -259,6 +267,7 @@ async function syncPeriods() {
     state.songs = [];
     state.recommendedSongIds = [];
     state.recommendationPeriodId = "";
+    state.recommendationDateKey = "";
     state.likedSongIds = new Set();
   }
   renderPeriodAdminState();
@@ -270,6 +279,7 @@ async function syncAllData() {
     state.songs = [];
     state.recommendedSongIds = [];
     state.recommendationPeriodId = "";
+    state.recommendationDateKey = "";
     state.likedSongIds = new Set();
     render();
     return;
@@ -277,7 +287,7 @@ async function syncAllData() {
 
   const [songs, likes] = await Promise.all([fetchSongs(state.currentPeriod.id), fetchLikes()]);
   state.songs = songs;
-  ensureRandomRecommendations();
+  ensureDailyRecommendations();
   state.likedSongIds = new Set(likes.map((item) => item.song_id));
   render();
 }
@@ -473,37 +483,50 @@ function render() {
   refs.pagination.innerHTML = createPagination(pageCount);
 }
 
-function ensureRandomRecommendations() {
+function ensureDailyRecommendations() {
   const periodId = state.currentPeriod?.id ?? "";
+  const dateKey = getDailyRecommendationKey();
   if (!state.songs.length || !periodId) {
     state.recommendedSongIds = [];
     state.recommendationPeriodId = periodId;
+    state.recommendationDateKey = dateKey;
     return;
   }
 
   const currentIds = new Set(state.songs.map((song) => song.id));
   const stillAvailableIds = state.recommendedSongIds.filter((songId) => currentIds.has(songId));
-  if (state.recommendationPeriodId === periodId && stillAvailableIds.length) {
+  if (state.recommendationPeriodId === periodId && state.recommendationDateKey === dateKey && stillAvailableIds.length) {
     state.recommendedSongIds = stillAvailableIds;
     return;
   }
 
   state.recommendationPeriodId = periodId;
-  state.recommendedSongIds = shuffleSongs(state.songs)
-    .slice(0, RANDOM_RECOMMENDATION_LIMIT)
+  state.recommendationDateKey = dateKey;
+  state.recommendedSongIds = [...state.songs]
+    .sort((firstSong, secondSong) => {
+      const firstScore = getStableSongScore(dateKey, periodId, firstSong.id);
+      const secondScore = getStableSongScore(dateKey, periodId, secondSong.id);
+      return firstScore - secondScore;
+    })
+    .slice(0, DAILY_RECOMMENDATION_LIMIT)
     .map((song) => song.id);
 }
 
 function renderRecommendations() {
   if (!refs.recommendationsPanel || !refs.recommendationsList) setupRecommendationsPanel();
   if (!refs.recommendationsPanel || !refs.recommendationsList) return;
-  if (state.songs.length && !state.recommendedSongIds.length) ensureRandomRecommendations();
+  if (state.songs.length) ensureDailyRecommendations();
 
   const recommendations = state.recommendedSongIds
     .map((songId) => state.songs.find((song) => song.id === songId))
     .filter(Boolean);
 
-  refs.recommendationsPanel.classList.toggle("hidden", recommendations.length === 0);
+  refs.recommendationsPanel.classList.remove("hidden");
+  if (!recommendations.length) {
+    refs.recommendationsList.innerHTML = createRecommendationsEmptyState();
+    return;
+  }
+
   refs.recommendationsList.innerHTML = recommendations
     .map((song, index) => createRecommendationCard(song, index + 1))
     .join("");
@@ -521,10 +544,10 @@ function setupRecommendationsPanel() {
   panel.innerHTML = `
     <div class="section-head">
       <div>
-        <p class="section-tag">Random Picks</p>
-        <h2>随机推荐</h2>
+        <p class="section-tag">Daily Picks</p>
+        <h2>每日推荐</h2>
       </div>
-      <p class="section-note">每次进入页面，从已投稿歌单中随机抽取至多五首，不按喜欢数量排序。</p>
+      <p class="section-note">每天从本期投稿中抽取至多五首，不按喜欢数量排序。</p>
     </div>
     <div class="recommendations-list" id="recommendationsList"></div>
   `;
@@ -534,22 +557,23 @@ function setupRecommendationsPanel() {
   refs.recommendationsList = panel.querySelector("#recommendationsList");
 }
 
-function shuffleSongs(songs) {
-  const shuffledSongs = [...songs];
-  for (let index = shuffledSongs.length - 1; index > 0; index -= 1) {
-    const swapIndex = getRandomIndex(index + 1);
-    [shuffledSongs[index], shuffledSongs[swapIndex]] = [shuffledSongs[swapIndex], shuffledSongs[index]];
-  }
-  return shuffledSongs;
+function getDailyRecommendationKey() {
+  const now = new Date();
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
 }
 
-function getRandomIndex(max) {
-  if (window.crypto?.getRandomValues) {
-    const values = new Uint32Array(1);
-    window.crypto.getRandomValues(values);
-    return values[0] % max;
+function getStableSongScore(dateKey, periodId, songId) {
+  const source = `${dateKey}|${periodId}|${songId}`;
+  let hash = 2166136261;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
   }
-  return Math.floor(Math.random() * max);
+  return hash >>> 0;
 }
 
 function renderPeriodStatus() {
@@ -694,6 +718,18 @@ function createEmptyState(title, copy) {
     <div class="empty-state">
       <h3 class="empty-title">${escapeHtml(title)}</h3>
       <p class="empty-copy">${escapeHtml(copy)}</p>
+    </div>
+  `;
+}
+
+function createRecommendationsEmptyState() {
+  const copy = state.currentPeriod
+    ? "本期有人投稿后，每日推荐会自动出现在这里。"
+    : "管理员开启征集期后，每日推荐会在这里出现。";
+  return `
+    <div class="empty-state recommendations-empty">
+      <h3 class="empty-title">暂无可推荐歌曲</h3>
+      <p class="empty-copy">${copy}</p>
     </div>
   `;
 }

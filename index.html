@@ -30,12 +30,12 @@
           </span>
         </a>
         <nav class="site-nav" aria-label="页面导航">
-          <a href="#top" class="is-active" data-nav-icon="home">首页</a>
+          <a href="#top" class="is-active" data-nav-icon="home" aria-current="page">首页</a>
           <a href="#submit" data-nav-icon="submit">提交</a>
           <a href="#playlist" data-nav-icon="rank">榜单</a>
           <a href="./history.html" data-nav-icon="history">往期</a>
         </nav>
-        <button class="nav-action" id="settingsOpenBtn" type="button">
+        <button class="nav-action" id="settingsOpenBtn" type="button" aria-label="管理员入口" title="管理员入口">
           <span aria-hidden="true">✈</span>
           管理员入口
         </button>
@@ -227,10 +227,10 @@
         <section class="card recommendations-panel hidden" id="recommendationsPanel">
           <div class="section-head">
             <div>
-              <p class="section-tag">Random Picks</p>
-              <h2>随机推荐</h2>
+              <p class="section-tag">Daily Picks</p>
+              <h2>每日推荐</h2>
             </div>
-            <p class="section-note">每次进入页面，从已投稿歌单中随机抽取至多五首，不按喜欢数量排序。</p>
+            <p class="section-note">每天从本期投稿中抽取至多五首，不按喜欢数量排序。</p>
           </div>
           <div class="recommendations-list" id="recommendationsList"></div>
         </section>

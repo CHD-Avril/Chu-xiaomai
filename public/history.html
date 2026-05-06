@@ -30,9 +30,9 @@
           <a href="./index.html" data-nav-icon="home">首页</a>
           <a href="./index.html#submit" data-nav-icon="submit">提交</a>
           <a href="./index.html#playlist" data-nav-icon="rank">榜单</a>
-          <a href="./history.html" class="is-active" data-nav-icon="history">往期</a>
+          <a href="./history.html" class="is-active" data-nav-icon="history" aria-current="page">往期</a>
         </nav>
-        <a class="nav-action" href="./index.html#submit">
+        <a class="nav-action" href="./index.html#submit" aria-label="返回征集" title="返回征集">
           <span aria-hidden="true">♫</span>
           返回征集
         </a>
@@ -76,6 +76,7 @@
           </div>
 
           <div id="historySongsTable" class="readonly-songs-list" aria-live="polite"></div>
+          <div class="pagination history-pagination" id="historyPagination"></div>
         </section>
       </main>
     </div>
