@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20260506-tabbar-fix" />
+    <link rel="stylesheet" href="./styles.css?v=20260506-tabbar-buttons" />
     <script type="module" src="./app.js"></script>
   </head>
   <body data-active-page="home">
@@ -264,9 +264,9 @@
     </div>
 
     <nav class="site-nav" aria-label="页面导航">
-      <a href="#top" class="is-active" data-nav-icon="home" aria-current="page">首页</a>
-      <a href="#submit" data-nav-icon="submit">提交</a>
-      <a href="#playlist" data-nav-icon="rank">榜单</a>
+      <button type="button" class="is-active" data-nav-page="home" data-nav-icon="home" aria-current="page">首页</button>
+      <button type="button" data-nav-page="submit" data-nav-icon="submit">提交</button>
+      <button type="button" data-nav-page="playlist" data-nav-icon="rank">榜单</button>
       <a href="./history.html" data-nav-icon="history">往期</a>
     </nav>
 

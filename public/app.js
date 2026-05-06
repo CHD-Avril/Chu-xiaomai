@@ -33,7 +33,8 @@ const state = {
 };
 
 const refs = {
-  navLinks: [...document.querySelectorAll(".site-nav a")],
+  navLinks: [...document.querySelectorAll(".site-nav [data-nav-page], .site-nav a")],
+  siteNav: document.querySelector(".site-nav"),
   targetDateLabel: document.querySelector("#targetDateLabel"),
   targetPeriodTitle: document.querySelector("#targetPeriodTitle"),
   targetPeriodTime: document.querySelector("#targetPeriodTime"),
@@ -120,6 +121,7 @@ if (!supabase) {
 }
 
 function bindEvents() {
+  refs.siteNav?.addEventListener("click", handleSiteNavClick);
   document.addEventListener("click", handleAppPageLinkClick);
   window.addEventListener("hashchange", () => {
     setActivePage(getPageFromHash(window.location.hash), { updateHash: false, scroll: false });
@@ -163,6 +165,18 @@ function bindEvents() {
   });
 }
 
+function handleSiteNavClick(event) {
+  const button = event.target.closest("[data-nav-page]");
+  if (!button) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  setActivePage(button.dataset.navPage, { updateHash: false, scroll: true });
+  if (window.location.hash) {
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+  }
+}
+
 function handleAppPageLinkClick(event) {
   const link = event.target.closest("a[href]");
   if (!link) return;
@@ -194,7 +208,7 @@ function setActivePage(page, options = {}) {
   document.body.dataset.activePage = nextPage;
 
   refs.navLinks.forEach((link) => {
-    const linkPage = getPageFromHref(link.getAttribute("href") || "");
+    const linkPage = link.dataset.navPage || getPageFromHref(link.getAttribute("href") || "");
     if (!linkPage) return;
     const isActive = linkPage === nextPage;
     link.classList.toggle("is-active", isActive);
