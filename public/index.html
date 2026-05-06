@@ -17,7 +17,7 @@
     <link rel="stylesheet" href="./styles.css" />
     <script type="module" src="./app.js"></script>
   </head>
-  <body>
+  <body data-active-page="home">
     <div class="page-shell">
       <header class="site-header">
         <a class="brand" href="#top" aria-label="长安大学广播台首页">
@@ -30,10 +30,10 @@
           </span>
         </a>
         <nav class="site-nav" aria-label="页面导航">
-          <a href="#top" class="is-active">首页</a>
-          <a href="#noticeBoard">告示栏</a>
-          <a href="./history.html">往期歌单</a>
-          <a href="#submit">小麦君</a>
+          <a href="#top" class="is-active" data-nav-icon="home">首页</a>
+          <a href="#submit" data-nav-icon="submit">提交</a>
+          <a href="#playlist" data-nav-icon="rank">榜单</a>
+          <a href="./history.html" data-nav-icon="history">往期</a>
         </nav>
         <button class="nav-action" id="settingsOpenBtn" type="button">
           <span aria-hidden="true">✈</span>
@@ -48,7 +48,7 @@
             <h1><span>长大小麦君</span><strong>征集歌单</strong></h1>
             <p class="hero-text">每一首歌，都是故事。让长大小麦君，遇见你的歌单。</p>
             <div class="hero-actions">
-              <a class="primary-button hero-button" href="#submit">♫ 立即投稿</a>
+              <a class="primary-button hero-button" href="#submit">♪ 我要提交歌曲</a>
               <span class="pill period-pill" id="targetDateLabel">
                 <span id="targetPeriodTitle">正在读取征集期...</span>
                 <span id="targetPeriodTime"></span>
@@ -183,7 +183,7 @@
           </div>
         </section>
 
-        <section class="content-grid" id="submit">
+        <section class="content-grid">
           <aside class="card notice-board" id="noticeBoard">
             <p class="section-tag">Notice Board</p>
             <h2>告示栏</h2>
@@ -193,7 +193,7 @@
             </div>
           </aside>
 
-          <section class="card form-panel">
+          <section class="card form-panel" id="submit">
             <div class="section-head">
               <div>
                 <p class="section-tag">Submit</p>

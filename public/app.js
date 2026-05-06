@@ -21,6 +21,7 @@ const state = {
   sortMode: "likes",
   searchTerm: "",
   currentPage: 1,
+  activePage: "home",
   isSubmitting: false,
   likingSongId: "",
   backendReady: false,
@@ -31,6 +32,7 @@ const state = {
 };
 
 const refs = {
+  navLinks: [...document.querySelectorAll(".site-nav a")],
   targetDateLabel: document.querySelector("#targetDateLabel"),
   targetPeriodTitle: document.querySelector("#targetPeriodTitle"),
   targetPeriodTime: document.querySelector("#targetPeriodTime"),
@@ -104,6 +106,7 @@ const supabase = hasValidSupabaseConfig()
 let authListenerBound = false;
 
 setupRecommendationsPanel();
+setActivePage(getPageFromHash(window.location.hash), { updateHash: false, scroll: false });
 updateHeroPeriodLabel("正在读取征集期", "");
 bindEvents();
 render();
@@ -116,6 +119,14 @@ if (!supabase) {
 }
 
 function bindEvents() {
+  document.addEventListener("click", handleAppPageLinkClick);
+  window.addEventListener("hashchange", () => {
+    setActivePage(getPageFromHash(window.location.hash), { updateHash: false, scroll: false });
+  });
+  window.addEventListener("popstate", () => {
+    setActivePage(getPageFromHash(window.location.hash), { updateHash: false, scroll: false });
+  });
+  document.addEventListener("click", handleSongListClick);
   refs.form.addEventListener("submit", handleSongSubmit);
   refs.searchInput.addEventListener("input", (event) => {
     state.searchTerm = event.target.value.trim();
@@ -127,7 +138,6 @@ function bindEvents() {
     state.currentPage = 1;
     render();
   });
-  refs.songsList.addEventListener("click", handleSongListClick);
   refs.pagination.addEventListener("click", handlePaginationClick);
   refs.pagination.addEventListener("submit", handlePaginationJump);
   refs.noticeBoardList.addEventListener("click", handleNoticeBoardClick);
@@ -150,6 +160,53 @@ function bindEvents() {
   refs.announcementModal.addEventListener("click", (event) => {
     if (event.target === refs.announcementModal) closeAnnouncementModal();
   });
+}
+
+function handleAppPageLinkClick(event) {
+  const link = event.target.closest("a[href]");
+  if (!link) return;
+
+  const page = getPageFromHref(link.getAttribute("href") || "");
+  if (!page) return;
+
+  event.preventDefault();
+  setActivePage(page, { updateHash: true, scroll: true });
+}
+
+function getPageFromHash(hash) {
+  return getPageFromHref(hash || "#top") || "home";
+}
+
+function getPageFromHref(href) {
+  if (href === "#top" || href === "#" || href === "") return "home";
+  if (href === "#submit") return "submit";
+  if (href === "#playlist") return "playlist";
+  return "";
+}
+
+function setActivePage(page, options = {}) {
+  const allowedPages = new Set(["home", "submit", "playlist"]);
+  const nextPage = allowedPages.has(page) ? page : "home";
+  const { updateHash = false, scroll = true } = options;
+
+  state.activePage = nextPage;
+  document.body.dataset.activePage = nextPage;
+
+  refs.navLinks.forEach((link) => {
+    const linkPage = getPageFromHref(link.getAttribute("href") || "");
+    if (linkPage) link.classList.toggle("is-active", linkPage === nextPage);
+  });
+
+  if (updateHash) {
+    const nextHash = nextPage === "home" ? "#top" : `#${nextPage === "submit" ? "submit" : "playlist"}`;
+    if (window.location.hash !== nextHash) window.history.pushState(null, "", nextHash);
+  }
+
+  if (scroll) {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } else {
+    window.scrollTo(0, 0);
+  }
 }
 
 async function bootSupabase() {
@@ -299,7 +356,9 @@ async function handleSongListClick(event) {
   const button = event.target.closest("[data-like-song]");
   if (!button || state.likingSongId || !state.backendReady) return;
   if (!canMutateCurrentPeriod()) {
-    updateFormHint(getReadOnlyMessage(), true);
+    const message = getReadOnlyMessage();
+    updateFormHint(message, true);
+    if (button.closest("#recommendationsPanel")) alert(message);
     render();
     return;
   }
@@ -584,15 +643,48 @@ function createSongCard(song, rank) {
   `;
 }
 
-function createRecommendationCard(song, rank) {
+function createLegacyRecommendationCard(song, rank) {
+  const isLiked = state.likedSongIds.has(song.id);
+  const isBusy = state.likingSongId === song.id;
+  const canLike = canMutateCurrentPeriod();
+  const likeLabel = isBusy ? "处理中" : isLiked ? "已投" : "投票";
+
   return `
-    <article class="recommendation-card">
+    <article class="recommendation-card" data-like-song="${song.id}">
       <span class="recommendation-rank">${String(rank).padStart(2, "0")}</span>
       <div class="recommendation-main">
         <strong title="${escapeHtml(song.title)}">${escapeHtml(song.title)}</strong>
         <span title="${escapeHtml(song.artist)}">${escapeHtml(song.artist)}</span>
       </div>
       <small><span aria-hidden="true">♥</span>${song.likesCount || 0} 喜欢</small>
+    </article>
+  `;
+}
+
+function createRecommendationCard(song, rank) {
+  const isLiked = state.likedSongIds.has(song.id);
+  const isBusy = state.likingSongId === song.id;
+  const canLike = canMutateCurrentPeriod();
+  const likeLabel = isBusy ? "处理中" : isLiked ? "已投" : "投票";
+
+  return `
+    <article class="recommendation-card" data-like-song="${song.id}">
+      <span class="recommendation-rank">${String(rank).padStart(2, "0")}</span>
+      <div class="recommendation-main">
+        <strong title="${escapeHtml(song.title)}">${escapeHtml(song.title)}</strong>
+        <span title="${escapeHtml(song.artist)}">${escapeHtml(song.artist)}</span>
+      </div>
+      <button
+        class="recommendation-like-button like-button ${isLiked ? "is-liked" : ""}"
+        type="button"
+        aria-pressed="${isLiked}"
+        data-like-song="${song.id}"
+        aria-disabled="${isBusy || !canLike}"
+      >
+        <span class="recommendation-like-heart" aria-hidden="true">♥</span>
+        <span class="recommendation-like-count">${song.likesCount || 0}</span>
+        <span class="recommendation-like-text">${likeLabel}</span>
+      </button>
     </article>
   `;
 }

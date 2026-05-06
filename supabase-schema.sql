@@ -459,8 +459,7 @@ begin
 end;
 $$;
 
-drop function if exists public.get_my_likes(text, text);
-create function public.get_my_likes(
+create or replace function public.get_my_likes(
   p_playlist_date text,
   p_voter_cookie text
 )
@@ -484,8 +483,7 @@ begin
 end;
 $$;
 
-drop function if exists public.toggle_song_like(uuid, text, text, text);
-create function public.toggle_song_like(
+create or replace function public.toggle_song_like(
   p_song_id uuid,
   p_playlist_date text,
   p_voter_cookie text,
@@ -576,8 +574,7 @@ begin
 end;
 $$;
 
-drop function if exists public.submit_song(text, text, text, text);
-create function public.submit_song(
+create or replace function public.submit_song(
   p_title text,
   p_artist text,
   p_playlist_date text,
@@ -627,6 +624,8 @@ begin
     raise exception 'The current period is not open for submissions.';
   end if;
 
+  submitter_hash := 'cookie:' || md5(normalized_cookie);
+
   select submission_cookie_per_period
   into max_submissions
   from public.security_settings
@@ -636,14 +635,13 @@ begin
     select count(*)::integer
     from public.songs song
     where song.playlist_date = p_playlist_date
-      and song.created_by = 'cookie:' || encode(digest(normalized_cookie, 'sha256'), 'hex')
+      and song.created_by = submitter_hash
   ) >= max_submissions then
     raise exception 'This browser has reached the submission limit for this period.';
   end if;
 
   clean_title_lower := lower(clean_title);
   clean_artist_lower := lower(clean_artist);
-  submitter_hash := 'cookie:' || encode(digest(normalized_cookie, 'sha256'), 'hex');
 
   if exists (
     select 1
@@ -777,6 +775,7 @@ grant execute on function public.is_admin_email_allowed(text) to anon, authentic
 grant execute on function public.get_my_likes(text, text) to anon, authenticated;
 grant execute on function public.toggle_song_like(uuid, text, text, text) to anon, authenticated;
 grant execute on function public.submit_song(text, text, text, text) to anon, authenticated;
+grant usage on schema public to anon, authenticated;
 
 create policy "admin_users_select_admin"
 on public.admin_users
@@ -868,6 +867,8 @@ using (public.is_current_user_admin());
 
 -- vote_attempts has no client-facing policies. It is written only by
 -- SECURITY DEFINER RPC functions.
+
+notify pgrst, 'reload schema';
 
 -- ---------------------------------------------------------------------
 -- Admin bootstrap helper

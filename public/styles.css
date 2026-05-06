@@ -2325,3 +2325,1117 @@ a {
     justify-self: start;
   }
 }
+
+/* Mobile app refactor */
+:root {
+  --app-max: 430px;
+  --tabbar-height: 76px;
+  --bg: #eef5ff;
+  --surface: rgba(255, 255, 255, 0.96);
+  --surface-strong: #ffffff;
+  --text: #0a2b57;
+  --muted: #6f7f94;
+  --line: rgba(21, 88, 207, 0.13);
+  --shadow: 0 18px 42px rgba(32, 84, 158, 0.13);
+  --shadow-soft: 0 10px 26px rgba(32, 84, 158, 0.09);
+  --content-width: var(--app-max);
+}
+
+html {
+  scroll-padding-top: 16px;
+}
+
+body {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(21, 88, 207, 0.11), transparent 28%),
+    radial-gradient(circle at 86% 18%, rgba(255, 203, 18, 0.18), transparent 23%),
+    linear-gradient(180deg, #fbfdff 0%, #edf5ff 52%, #ffffff 100%);
+}
+
+body::before {
+  background:
+    repeating-radial-gradient(circle at 92% 8%, rgba(21, 88, 207, 0.08) 0 1px, transparent 2px 13px),
+    linear-gradient(160deg, transparent 0 58%, rgba(79, 134, 236, 0.08) 59%, transparent 60%);
+  opacity: 0.8;
+}
+
+.page-shell {
+  width: min(calc(100% - 20px), var(--app-max));
+  max-width: var(--app-max);
+  padding: max(12px, env(safe-area-inset-top)) 0 calc(var(--tabbar-height) + 30px + env(safe-area-inset-bottom));
+}
+
+main > section,
+.form-panel,
+.list-panel,
+.history-browser {
+  scroll-margin-top: 16px;
+  scroll-margin-bottom: calc(var(--tabbar-height) + 18px);
+}
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 70;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 56px;
+  padding: 8px 0 10px;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.96), rgba(248, 251, 255, 0.72));
+  backdrop-filter: blur(14px);
+}
+
+.brand {
+  min-width: 0;
+  gap: 9px;
+}
+
+.brand-mark {
+  width: 34px;
+  height: 30px;
+  gap: 2px;
+}
+
+.brand-mark span {
+  width: 3px;
+}
+
+.brand-mark span:nth-child(2),
+.brand-mark span:nth-child(4) {
+  height: 19px;
+}
+
+.brand-mark span:nth-child(3) {
+  height: 27px;
+}
+
+.brand strong {
+  overflow: hidden;
+  font-size: 0.96rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand small {
+  max-width: 190px;
+  overflow: hidden;
+  color: #6d7d93;
+  font-size: 0.62rem;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-nav {
+  position: fixed;
+  left: 50%;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  z-index: 90;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+  width: min(calc(100% - 22px), var(--app-max));
+  min-height: 66px;
+  margin: 0;
+  padding: 7px 8px 6px;
+  border: 1px solid rgba(21, 88, 207, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 16px 38px rgba(25, 70, 138, 0.18);
+  transform: translateX(-50%);
+  backdrop-filter: blur(18px);
+}
+
+.site-nav a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 52px;
+  padding: 5px 2px 4px;
+  border: 0;
+  border-radius: 14px;
+  color: #738198;
+  font-size: 0.72rem;
+  font-weight: 900;
+  background: transparent;
+}
+
+.site-nav a::before {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  border-radius: 9px;
+  color: currentColor;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.site-nav a[data-nav-icon="home"]::before {
+  content: "⌂";
+}
+
+.site-nav a[data-nav-icon="submit"]::before {
+  content: "+";
+  font-size: 1.28rem;
+}
+
+.site-nav a[data-nav-icon="rank"]::before {
+  content: "▥";
+}
+
+.site-nav a[data-nav-icon="history"]::before {
+  content: "◷";
+}
+
+.site-nav a::after {
+  display: none;
+}
+
+.site-nav a:hover,
+.site-nav a.is-active {
+  color: var(--blue);
+  background: rgba(21, 88, 207, 0.08);
+}
+
+.site-nav a.is-active::before {
+  color: #fff;
+  background: linear-gradient(135deg, #1768df, #0d4ec3);
+  box-shadow: 0 8px 16px rgba(21, 88, 207, 0.2);
+}
+
+.nav-action {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0;
+  border: 1px solid rgba(21, 88, 207, 0.11);
+  border-radius: 14px;
+  color: var(--blue);
+  font-size: 0;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow-soft);
+}
+
+.nav-action span {
+  font-size: 1rem;
+}
+
+.hero {
+  position: relative;
+  display: block;
+  min-height: 0;
+  margin-top: 8px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.92);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 83% 28%, rgba(255, 203, 18, 0.25), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 249, 255, 0.94));
+  box-shadow: var(--shadow);
+}
+
+.hero-copy {
+  position: relative;
+  z-index: 2;
+  padding: 24px 22px 22px;
+}
+
+.eyebrow,
+.section-tag {
+  display: none;
+}
+
+.hero h1 {
+  max-width: 270px;
+  font-size: clamp(2.36rem, 12vw, 3.12rem);
+  line-height: 1.08;
+}
+
+.hero h1 strong {
+  color: var(--yellow);
+}
+
+.hero h1 strong::after {
+  content: none;
+}
+
+.hero-text {
+  max-width: 230px;
+  margin-top: 14px;
+  color: #7a8796;
+  font-size: 0.98rem;
+  line-height: 1.72;
+}
+
+.hero-actions {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.hero-button,
+.period-pill {
+  width: 100%;
+}
+
+.primary-button.hero-button {
+  min-height: 48px;
+  color: #0b2b57;
+  background: linear-gradient(135deg, #ffe16a, #ffc400);
+  box-shadow: 0 12px 24px rgba(255, 196, 0, 0.24);
+}
+
+.period-pill {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  min-width: 0;
+  min-height: 54px;
+  padding: 10px 13px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: none;
+}
+
+.period-pill span:last-child {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.hero-visual {
+  position: absolute;
+  right: -52px;
+  bottom: 22px;
+  z-index: 1;
+  width: 214px;
+  height: 214px;
+  min-height: 0;
+  opacity: 0.78;
+  pointer-events: none;
+}
+
+.hero-visual::before {
+  inset: 20px 12px 12px 20px;
+}
+
+.record {
+  top: 34px;
+  right: 62px;
+  left: auto;
+  width: 112px;
+  box-shadow: 0 18px 42px rgba(255, 203, 18, 0.28);
+}
+
+.record-core {
+  width: 40px;
+  height: 40px;
+  gap: 3px;
+}
+
+.record-core span {
+  width: 3px;
+}
+
+.orbit-one {
+  top: 4px;
+  left: 36px;
+  width: 178px;
+}
+
+.orbit-two {
+  top: 18px;
+  left: 50px;
+  width: 148px;
+}
+
+.dot-blue {
+  top: 24px;
+  right: 32px;
+}
+
+.dot-yellow {
+  top: 112px;
+  left: 42px;
+}
+
+.wave-bars {
+  top: auto;
+  right: 18px;
+  bottom: 10px;
+  gap: 7px;
+  height: 84px;
+  transform: scale(0.62);
+  transform-origin: right bottom;
+}
+
+.card,
+.stats-row {
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(14px);
+}
+
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.stat-card {
+  min-height: 78px;
+  padding: 14px;
+  border: 1px solid rgba(21, 88, 207, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-soft);
+}
+
+.stat-card:nth-child(3) {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 62px;
+}
+
+.stat-label {
+  font-size: 0.78rem;
+}
+
+.stat-value {
+  font-size: 1.48rem;
+}
+
+.stat-status {
+  font-size: 1rem;
+}
+
+.content-grid,
+.admin-grid,
+.period-time-grid,
+.export-controls {
+  grid-template-columns: 1fr;
+}
+
+.content-grid,
+.list-panel,
+.admin-panel,
+.recommendations-panel {
+  margin-top: 12px;
+}
+
+.notice-board,
+.form-panel,
+.list-panel,
+.admin-panel,
+.recommendations-panel,
+.history-hero,
+.history-browser {
+  padding: 18px;
+}
+
+.notice-board-copy,
+.section-note {
+  display: none;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.section-head h2,
+.notice-board h2,
+.modal-header h2,
+.admin-block h3 {
+  font-size: 1.12rem;
+  line-height: 1.35;
+}
+
+.notice-board {
+  order: 1;
+}
+
+.form-panel {
+  order: 2;
+}
+
+.notice-board-list {
+  gap: 9px;
+  margin-top: 14px;
+}
+
+.notice-board-item {
+  min-height: 0;
+  padding: 13px;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.notice-board-item.is-latest {
+  background:
+    linear-gradient(135deg, rgba(255, 245, 189, 0.72), rgba(255, 255, 255, 0.94) 58%),
+    #fff;
+}
+
+.notice-board-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+}
+
+.notice-board-title-row {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+
+.notice-board-item strong {
+  white-space: normal;
+}
+
+.notice-board-item time,
+.notice-board-open {
+  font-size: 0.76rem;
+}
+
+.submission-period-card {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  margin-bottom: 15px;
+  padding: 12px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f8fbff, #ffffff);
+}
+
+.period-state-chip {
+  min-width: 58px;
+  min-height: 30px;
+  border-radius: 10px;
+  font-size: 0.78rem;
+}
+
+.song-form,
+.period-form,
+.announcement-form,
+.admin-login-form,
+.admin-block {
+  gap: 14px;
+}
+
+.field {
+  gap: 7px;
+}
+
+.field span {
+  font-size: 0.86rem;
+}
+
+.field input,
+.field select,
+.field textarea,
+.primary-button {
+  min-height: 48px;
+  border-radius: 13px;
+}
+
+.field input,
+.field select,
+.field textarea {
+  border-color: rgba(14, 57, 116, 0.12);
+  background: #fff;
+}
+
+.form-panel .primary-button,
+.modal-footer .primary-button {
+  width: 100%;
+}
+
+.form-hint {
+  margin-top: 10px;
+  font-size: 0.86rem;
+  line-height: 1.65;
+}
+
+.recommendations-panel {
+  overflow: hidden;
+}
+
+.recommendations-panel .section-head {
+  margin-bottom: 14px;
+}
+
+.recommendations-list {
+  display: flex;
+  grid-template-columns: none;
+  gap: 10px;
+  margin: 0 -18px;
+  padding: 0 18px 4px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+.recommendations-list::-webkit-scrollbar {
+  display: none;
+}
+
+.recommendation-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  flex: 0 0 126px;
+  gap: 10px;
+  min-height: 136px;
+  padding: 13px;
+  border: 1px solid rgba(21, 88, 207, 0.1);
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, rgba(255, 246, 199, 0.9), rgba(255, 255, 255, 0.96) 56%),
+    #fff;
+  box-shadow: none;
+  scroll-snap-align: start;
+  cursor: pointer;
+}
+
+.recommendation-card::after {
+  display: none;
+}
+
+.recommendation-card:nth-child(2) {
+  border-color: rgba(21, 88, 207, 0.1);
+  background:
+    linear-gradient(145deg, rgba(255, 246, 199, 0.9), rgba(255, 255, 255, 0.96) 56%),
+    #fff;
+  box-shadow: none;
+}
+
+.recommendation-rank {
+  position: static;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  color: #0b2b57;
+  background: var(--yellow);
+  box-shadow: none;
+}
+
+.recommendation-main {
+  min-width: 0;
+}
+
+.recommendation-main strong,
+.recommendation-main span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recommendation-main strong {
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+.recommendation-main span {
+  font-size: 0.78rem;
+}
+
+.recommendation-card small {
+  position: static;
+  grid-column: auto;
+  font-size: 0.78rem;
+}
+
+.recommendation-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.recommendation-actions small {
+  min-width: 0;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.recommendation-like-button.like-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 48px;
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: 10px;
+  color: var(--blue);
+  font-size: 0.72rem;
+  font-weight: 900;
+  background: rgba(21, 88, 207, 0.08);
+}
+
+.recommendation-like-button.like-button::before {
+  content: none;
+}
+
+.recommendation-like-button.like-button.is-liked {
+  color: var(--green);
+  background: rgba(22, 163, 106, 0.12);
+}
+
+.recommendation-like-button.like-button[aria-disabled="true"] {
+  opacity: 0.58;
+}
+
+.recommendation-like-button.like-button.is-liked::before {
+  content: none;
+}
+
+.recommendation-like-heart {
+  color: currentColor;
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.recommendation-like-count,
+.recommendation-like-text {
+  line-height: 1;
+}
+
+.controls {
+  grid-template-columns: minmax(0, 1fr) 116px;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.controls .field > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.controls .field input,
+.controls .field select {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 0.88rem;
+}
+
+.songs-list,
+.readonly-songs-list {
+  display: grid;
+  gap: 10px;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+}
+
+.songs-table-header,
+.readonly-table-header {
+  display: none;
+}
+
+.songs-list .song-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "index title action"
+    "index artist likes";
+  gap: 6px 10px;
+  min-height: 0;
+  padding: 13px;
+  border: 1px solid rgba(21, 88, 207, 0.1);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--shadow-soft);
+}
+
+.song-index,
+.song-title,
+.song-artist,
+.song-like-count,
+.song-card .like-button {
+  height: auto;
+  padding: 0;
+  border-right: 0;
+}
+
+.song-index {
+  grid-area: index;
+  align-self: start;
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 12px;
+  color: var(--blue);
+  background: rgba(21, 88, 207, 0.08);
+}
+
+.songs-list .song-card:nth-of-type(1) .song-index,
+.songs-list .song-card:nth-of-type(3) .song-index {
+  color: #0b2b57;
+  background: var(--yellow);
+}
+
+.songs-list .song-card:nth-of-type(2) .song-index {
+  color: #fff;
+  background: var(--blue);
+}
+
+.song-title {
+  grid-area: title;
+  align-items: start;
+  min-height: 0;
+  font-size: 0.98rem;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.song-artist {
+  grid-area: artist;
+  min-height: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.song-like-count {
+  grid-area: likes;
+  justify-content: flex-end;
+  min-height: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.song-like-count::before {
+  content: "";
+  margin: 0;
+}
+
+.song-like-count::after {
+  content: " 票";
+}
+
+.song-card .like-button {
+  grid-area: action;
+  justify-self: end;
+  min-width: 74px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 11px;
+  color: var(--blue);
+  font-size: 0.78rem;
+  background: rgba(21, 88, 207, 0.08);
+}
+
+.song-card .like-button.is-liked {
+  color: var(--green);
+  background: rgba(22, 163, 106, 0.12);
+}
+
+.pagination {
+  margin-top: 14px;
+}
+
+.pagination-button,
+.pagination-jump input {
+  border-radius: 12px;
+}
+
+.admin-panel {
+  padding: 18px;
+}
+
+.admin-block {
+  padding: 15px;
+  border-radius: 14px;
+}
+
+.admin-actions {
+  display: grid;
+  gap: 9px;
+}
+
+.history-page {
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.history-hero {
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.history-hero h1 {
+  font-size: 2.22rem;
+  line-height: 1.08;
+}
+
+.history-hero p:not(.section-tag) {
+  margin-top: 12px;
+  font-size: 0.94rem;
+}
+
+.history-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  border: 0;
+  background: transparent;
+}
+
+.readonly-song-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  grid-template-areas:
+    "index title"
+    "index artist"
+    "meta meta";
+  gap: 6px 10px;
+  min-height: 0;
+  padding: 13px;
+  border: 1px solid rgba(21, 88, 207, 0.1);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--shadow-soft);
+}
+
+.readonly-song-row .song-index,
+.readonly-song-row .song-title,
+.readonly-song-row .song-artist,
+.readonly-song-row .song-like-count {
+  height: auto;
+  padding: 0;
+  border-right: 0;
+}
+
+.readonly-song-row .song-index {
+  grid-area: index;
+  align-self: start;
+}
+
+.readonly-song-row .song-title {
+  grid-area: title;
+}
+
+.readonly-song-row .song-artist {
+  grid-area: artist;
+}
+
+.readonly-song-row .song-like-count {
+  grid-area: meta;
+  justify-content: flex-start;
+}
+
+.modal-overlay {
+  align-items: flex-end;
+  padding: 10px;
+}
+
+.settings-modal,
+.announcement-modal {
+  width: min(100%, var(--app-max));
+  max-height: 92vh;
+  border-radius: 20px 20px 14px 14px;
+}
+
+.modal-header,
+.admin-login-form,
+.announcement-modal-body,
+.modal-footer {
+  padding: 18px;
+}
+
+.site-footer {
+  display: none;
+}
+
+@media (max-width: 360px) {
+  .page-shell {
+    width: min(calc(100% - 14px), var(--app-max));
+  }
+
+  .brand small {
+    max-width: 150px;
+  }
+
+  .hero-copy {
+    padding: 22px 18px 20px;
+  }
+
+  .hero h1 {
+    font-size: 2.12rem;
+  }
+
+  .hero-text {
+    max-width: 205px;
+  }
+
+  .hero-visual {
+    right: -72px;
+    opacity: 0.52;
+  }
+
+  .site-nav {
+    width: calc(100% - 14px);
+  }
+
+  .song-card .like-button {
+    min-width: 66px;
+    padding: 0 8px;
+  }
+}
+
+/* Tabbed page flow */
+body[data-active-page="home"] .form-panel,
+body[data-active-page="home"] .list-panel,
+body[data-active-page="submit"] .hero,
+body[data-active-page="submit"] .stats-row,
+body[data-active-page="submit"] .notice-board,
+body[data-active-page="submit"] .admin-panel,
+body[data-active-page="submit"] .recommendations-panel,
+body[data-active-page="submit"] .list-panel,
+body[data-active-page="playlist"] .hero,
+body[data-active-page="playlist"] .stats-row,
+body[data-active-page="playlist"] .content-grid,
+body[data-active-page="playlist"] .recommendations-panel,
+body[data-active-page="playlist"] .admin-panel {
+  display: none !important;
+}
+
+body[data-active-page="home"] .content-grid,
+body[data-active-page="submit"] .content-grid {
+  display: block;
+}
+
+body[data-active-page="playlist"] .list-panel {
+  display: block;
+}
+
+body[data-active-page="home"] .recommendations-panel:not(.hidden) {
+  display: block;
+}
+
+body[data-active-page="submit"] .form-panel {
+  display: block;
+}
+
+body[data-active-page="home"] main,
+body[data-active-page="submit"] main,
+body[data-active-page="playlist"] main {
+  min-height: calc(100dvh - var(--tabbar-height) - 92px);
+}
+
+/* Denser ranking rows */
+.songs-list {
+  gap: 7px;
+}
+
+.songs-list .song-card {
+  grid-template-columns: 32px minmax(0, 1fr) 52px;
+  grid-template-areas:
+    "index title action"
+    "index artist likes";
+  gap: 3px 8px;
+  padding: 8px 9px;
+  border-radius: 11px;
+  box-shadow: 0 7px 18px rgba(32, 84, 158, 0.08);
+}
+
+.song-index {
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 9px;
+  font-size: 0.72rem;
+}
+
+.song-title {
+  display: block;
+  font-size: 0.9rem;
+  line-height: 1.22;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song-artist {
+  display: block;
+  font-size: 0.76rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song-like-count {
+  align-self: center;
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.song-card .like-button {
+  min-width: 50px;
+  min-height: 28px;
+  padding: 0 6px;
+  border-radius: 9px;
+  font-size: 0;
+}
+
+.song-card .like-button::before {
+  content: "投票";
+  font-size: 0.72rem;
+}
+
+.song-card .like-button.is-liked::before {
+  content: "已投";
+}
+
+/* Hash fallback for tab switching */
+body:has(#submit:target) .hero,
+body:has(#submit:target) .stats-row,
+body:has(#submit:target) .notice-board,
+body:has(#submit:target) .admin-panel,
+body:has(#submit:target) .list-panel,
+body:has(#playlist:target) .hero,
+body:has(#playlist:target) .stats-row,
+body:has(#playlist:target) .content-grid,
+body:has(#playlist:target) .recommendations-panel,
+body:has(#playlist:target) .admin-panel {
+  display: none !important;
+}
+
+body:has(#submit:target) .content-grid,
+body:has(#submit:target) .form-panel {
+  display: block !important;
+}
+
+body:has(#playlist:target) .list-panel {
+  display: block !important;
+}
+
+#submit:target,
+#playlist:target {
+  display: block !important;
+}
