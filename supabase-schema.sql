@@ -397,7 +397,7 @@ begin
   select *
   into settings
   from public.security_settings
-  where id = true;
+  where public.security_settings.id = true;
 
   if not found then
     raise exception 'Security settings are missing.';
@@ -535,7 +535,7 @@ begin
     select max_likes_per_period
     into max_likes
     from public.security_settings
-    where id = true;
+    where public.security_settings.id = true;
 
     if (
       select count(*)::integer
@@ -562,7 +562,7 @@ begin
     where song_id = p_song_id
       and playlist_date = p_playlist_date
   )
-  where id = p_song_id
+  where public.songs.id = p_song_id
   returning public.songs.likes_count into next_likes_count;
 
   return query
@@ -630,7 +630,7 @@ begin
   select submission_cookie_per_period
   into max_submissions
   from public.security_settings
-  where id = true;
+  where public.security_settings.id = true;
 
   if (
     select count(*)::integer
@@ -943,7 +943,7 @@ using (public.is_current_user_admin());
 --       updated_at
 --     )
 --     values (
---       admin_user_id::text,
+--       admin_user_id,
 --       admin_user_id,
 --       admin_user_id::text,
 --       jsonb_build_object('sub', admin_user_id::text, 'email', admin_email),
