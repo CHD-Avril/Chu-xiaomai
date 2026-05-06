@@ -3471,3 +3471,42 @@ body:has(#playlist:target) .list-panel {
 #playlist:target {
   display: block !important;
 }
+
+/* Final tabbar override: keep the four main nav buttons pinned to the viewport bottom. */
+.site-nav {
+  position: fixed !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: 0 !important;
+  left: 50% !important;
+  z-index: 900 !important;
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 2px !important;
+  width: min(100%, var(--app-max)) !important;
+  max-width: var(--app-max) !important;
+  min-height: var(--tabbar-height) !important;
+  margin: 0 !important;
+  padding: 7px 8px max(6px, env(safe-area-inset-bottom)) !important;
+  border: 1px solid rgba(21, 88, 207, 0.1) !important;
+  border-bottom: 0 !important;
+  border-radius: 18px 18px 0 0 !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: 0 -10px 28px rgba(25, 70, 138, 0.14) !important;
+  transform: translateX(-50%) !important;
+  backdrop-filter: blur(18px);
+}
+
+.site-nav a {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 1 1 auto !important;
+  flex-direction: column !important;
+  gap: 3px !important;
+  min-height: 52px !important;
+  padding: 5px 2px 4px !important;
+  border: 0 !important;
+  border-radius: 14px !important;
+  font-size: 0.72rem !important;
+}
