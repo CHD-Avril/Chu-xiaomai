@@ -2446,18 +2446,19 @@ main > section,
 .site-nav {
   position: fixed;
   left: 50%;
-  bottom: max(10px, env(safe-area-inset-bottom));
+  bottom: 0;
   grid-column: 1 / -1;
   z-index: 90;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 2px;
-  width: min(calc(100% - 22px), var(--app-max));
+  width: min(100%, var(--app-max));
   min-height: 66px;
   margin: 0;
-  padding: 7px 8px 6px;
+  padding: 7px 8px max(6px, env(safe-area-inset-bottom));
   border: 1px solid rgba(21, 88, 207, 0.1);
-  border-radius: 18px;
+  border-bottom: 0;
+  border-radius: 18px 18px 0 0;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 16px 38px rgba(25, 70, 138, 0.18);
   transform: translateX(-50%);
@@ -3330,7 +3331,7 @@ main > section,
   }
 
   .site-nav {
-    width: calc(100% - 14px);
+    width: 100%;
   }
 
   .song-card .like-button {
