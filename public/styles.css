@@ -3446,34 +3446,6 @@ body[data-active-page="playlist"] main {
   content: "已投";
 }
 
-/* Hash fallback for tab switching */
-body:has(#submit:target) .hero,
-body:has(#submit:target) .stats-row,
-body:has(#submit:target) .notice-board,
-body:has(#submit:target) .admin-panel,
-body:has(#submit:target) .list-panel,
-body:has(#playlist:target) .hero,
-body:has(#playlist:target) .stats-row,
-body:has(#playlist:target) .content-grid,
-body:has(#playlist:target) .recommendations-panel,
-body:has(#playlist:target) .admin-panel {
-  display: none !important;
-}
-
-body:has(#submit:target) .content-grid,
-body:has(#submit:target) .form-panel {
-  display: block !important;
-}
-
-body:has(#playlist:target) .list-panel {
-  display: block !important;
-}
-
-#submit:target,
-#playlist:target {
-  display: block !important;
-}
-
 /* Final tabbar override: keep the four main nav buttons pinned to the viewport bottom. */
 .site-nav {
   position: fixed !important;
