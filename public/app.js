@@ -7,7 +7,7 @@ const HISTORY_PREVIEW_LIMIT = 6;
 const PERIODS_TABLE = "playlist_periods";
 const VISITOR_COOKIE_NAME = "chu_xiaomai_voter_id";
 const LEGACY_VISITOR_STORAGE_KEY = "chu_xiaomai_visitor_id";
-const REPORT_LONG_PRESS_MS = 520;
+const DISLIKE_REASON_MAX_LENGTH = 20;
 
 const state = {
   userId: "",
@@ -29,7 +29,6 @@ const state = {
   isSubmitting: false,
   likingSongId: "",
   dislikingSongId: "",
-  reportingSongId: "",
   reviewingReportId: "",
   backendReady: false,
   isAdminAuthenticated: false,
@@ -104,10 +103,6 @@ const refs = {
   announcementAckBtn: document.querySelector("#announcementAckBtn"),
 };
 
-let reportPressTimer = 0;
-let reportPressSongId = "";
-let suppressDislikeClickSongId = "";
-
 const supabase = hasValidSupabaseConfig()
   ? createClient(supabaseConfig.url, supabaseConfig.anonKey, {
       auth: {
@@ -137,9 +132,6 @@ if (!supabase) {
 function bindEvents() {
   refs.siteNav?.addEventListener("click", handleSiteNavClick);
   document.addEventListener("click", handleAppPageLinkClick);
-  document.addEventListener("pointerup", handleSongListPointerUp);
-  document.addEventListener("pointercancel", cancelReportPress);
-  document.addEventListener("pointerleave", cancelReportPress);
   window.addEventListener("hashchange", () => {
     setActivePage(getPageFromHash(window.location.hash), { updateHash: false, scroll: false });
   });
@@ -147,8 +139,6 @@ function bindEvents() {
     setActivePage(getPageFromHash(window.location.hash), { updateHash: false, scroll: false });
   });
   document.addEventListener("click", handleSongListClick);
-  document.addEventListener("pointerdown", handleSongListPointerDown);
-  document.addEventListener("contextmenu", handleSongListContextMenu);
   refs.form.addEventListener("submit", handleSongSubmit);
   refs.searchInput.addEventListener("input", (event) => {
     state.searchTerm = event.target.value.trim();
@@ -417,10 +407,6 @@ async function handleSongSubmit(event) {
 async function handleSongListClick(event) {
   const dislikeButton = event.target.closest("[data-dislike-song]");
   if (dislikeButton) {
-    if (suppressDislikeClickSongId === dislikeButton.dataset.dislikeSong) {
-      suppressDislikeClickSongId = "";
-      return;
-    }
     await handleDislikeClick(dislikeButton);
     return;
   }
@@ -482,6 +468,10 @@ async function handleDislikeClick(button) {
     return;
   }
 
+  const wasDisliked = state.dislikedSongIds.has(songId);
+  const reason = wasDisliked ? "" : promptDislikeReason(song);
+  if (!wasDisliked && !reason) return;
+
   state.dislikingSongId = songId;
   render();
 
@@ -489,7 +479,7 @@ async function handleDislikeClick(button) {
     if (state.dislikedSongIds.has(songId)) {
       await undislikeSong(songId);
     } else {
-      await dislikeSong(songId);
+      await dislikeSong(songId, reason);
     }
     await syncAllData();
   } catch (error) {
@@ -499,74 +489,6 @@ async function handleDislikeClick(button) {
     state.dislikingSongId = "";
     render();
   }
-}
-
-function handleSongListPointerDown(event) {
-  const button = event.target.closest("[data-dislike-song]");
-  if (!button || !state.backendReady || !canMutateCurrentPeriod()) return;
-  if (event.pointerType === "touch" || event.pointerType === "pen") {
-    event.preventDefault();
-  }
-
-  const songId = button.dataset.dislikeSong;
-  const song = state.songs.find((item) => item.id === songId);
-  if (!song || song.isLocked) return;
-
-  cancelReportPress();
-  reportPressSongId = songId;
-  button.classList.add("is-report-pressing");
-  reportPressTimer = window.setTimeout(() => {
-    suppressDislikeClickSongId = songId;
-    reportSong(songId).finally(() => {
-      button.classList.remove("is-report-pressing");
-      reportPressTimer = 0;
-      reportPressSongId = "";
-    });
-  }, REPORT_LONG_PRESS_MS);
-}
-
-function handleSongListPointerUp(event) {
-  const button = event.target.closest("[data-dislike-song]");
-  if (
-    button &&
-    reportPressTimer &&
-    (event.pointerType === "touch" || event.pointerType === "pen") &&
-    button.dataset.dislikeSong === reportPressSongId
-  ) {
-    const songId = button.dataset.dislikeSong;
-    cancelReportPress();
-    suppressDislikeClickSongId = songId;
-    handleDislikeClick(button);
-    return;
-  }
-
-  cancelReportPress();
-}
-
-function handleSongListContextMenu(event) {
-  const button = event.target.closest("[data-dislike-song]");
-  if (!button) return;
-
-  event.preventDefault();
-  const songId = button.dataset.dislikeSong;
-  const song = state.songs.find((item) => item.id === songId);
-  if (!song || song.isLocked || !state.backendReady || !canMutateCurrentPeriod()) return;
-
-  cancelReportPress();
-  suppressDislikeClickSongId = songId;
-  reportSong(songId);
-}
-
-function cancelReportPress() {
-  if (!reportPressTimer) return;
-  window.clearTimeout(reportPressTimer);
-  reportPressTimer = 0;
-  if (reportPressSongId) {
-    document.querySelectorAll(`[data-dislike-song="${CSS.escape(reportPressSongId)}"]`).forEach((button) => {
-      button.classList.remove("is-report-pressing");
-    });
-  }
-  reportPressSongId = "";
 }
 
 async function likeSong(songId) {
@@ -589,12 +511,29 @@ async function unlikeSong(songId) {
   if (error) throw error;
 }
 
-async function dislikeSong(songId) {
+function promptDislikeReason(song) {
+  const reason = window.prompt(`请填写踩「${song.title}」的理由（20字以内）：`, "");
+  if (reason === null) return "";
+
+  const cleanReason = reason.trim();
+  if (!cleanReason) {
+    alert("踩之前需要填写理由。");
+    return "";
+  }
+  if (Array.from(cleanReason).length > DISLIKE_REASON_MAX_LENGTH) {
+    alert("理由不能超过 20 个字。");
+    return "";
+  }
+  return cleanReason;
+}
+
+async function dislikeSong(songId, reason) {
   const { error } = await supabase.rpc("toggle_song_dislike", {
     p_song_id: songId,
     p_playlist_date: state.currentPeriod.id,
     p_voter_cookie: state.userId,
     p_action: "dislike",
+    p_reason: reason,
   });
   if (error) throw error;
 }
@@ -605,34 +544,9 @@ async function undislikeSong(songId) {
     p_playlist_date: state.currentPeriod.id,
     p_voter_cookie: state.userId,
     p_action: "undislike",
+    p_reason: null,
   });
   if (error) throw error;
-}
-
-async function reportSong(songId) {
-  if (state.reportingSongId) return;
-  const song = state.songs.find((item) => item.id === songId);
-  if (!song || song.isLocked) return;
-
-  state.reportingSongId = songId;
-  render();
-  try {
-    const { error } = await supabase.rpc("report_song", {
-      p_song_id: songId,
-      p_playlist_date: state.currentPeriod.id,
-      p_voter_cookie: state.userId,
-      p_reason: "不合规定",
-    });
-    if (error) throw error;
-    alert("已提交举报，管理员会在后台审查。");
-    if (state.isAdminAuthenticated) await fetchReports();
-  } catch (error) {
-    console.error("举报歌曲失败:", error);
-    alert(`举报失败：${resolveErrorMessage(error)}`);
-  } finally {
-    state.reportingSongId = "";
-    render();
-  }
 }
 
 function handlePaginationClick(event) {
@@ -788,8 +702,8 @@ function setupReportReviewPanel() {
   panel.id = "reportReviewPanel";
   panel.innerHTML = `
     <p class="section-tag">Reports</p>
-    <h3>举报审查</h3>
-    <p class="section-note">同意举报后，歌曲会被锁定，不能继续赞、踩或取消投票。</p>
+    <h3>踩理由审查</h3>
+    <p class="section-note">同意后，歌曲会被锁定，不能继续赞、踩或取消投票。</p>
     <div id="reportReviewList" class="report-review-list"></div>
     <p class="form-hint" id="reportReviewHint">暂无待审查举报。</p>
   `;
@@ -977,18 +891,16 @@ function createSongCard(song, rank) {
   const isLiked = state.likedSongIds.has(song.id);
   const isDisliked = state.dislikedSongIds.has(song.id);
   const isBusy = state.likingSongId === song.id;
-  const isDislikeBusy = state.dislikingSongId === song.id || state.reportingSongId === song.id;
+  const isDislikeBusy = state.dislikingSongId === song.id;
   const canVote = canMutateCurrentPeriod() && !song.isLocked;
   const likeLabel = song.isLocked ? "已锁定" : isBusy ? "处理中" : isLiked ? `已喜欢 ${song.likesCount}` : `喜欢 ${song.likesCount}`;
   const dislikeLabel = song.isLocked
     ? "锁定"
-    : state.reportingSongId === song.id
-      ? "举报中"
-      : isDislikeBusy
-        ? "处理中"
-        : isDisliked
-          ? `已踩 ${song.dislikesCount}`
-          : `踩 ${song.dislikesCount}`;
+    : isDislikeBusy
+      ? "处理中"
+      : isDisliked
+        ? `已踩 ${song.dislikesCount}`
+        : `踩 ${song.dislikesCount}`;
 
   return `
     <article class="song-card ${song.isLocked ? "is-locked" : ""}">
@@ -1008,7 +920,7 @@ function createSongCard(song, rank) {
         class="dislike-button ${isDisliked ? "is-disliked" : ""}"
         type="button"
         data-dislike-song="${song.id}"
-        title="点击踩，长按举报歌曲不合规定"
+        title="点击踩并填写理由，理由会进入管理员工作区"
         ${isBusy || isDislikeBusy || !canVote ? "disabled" : ""}
       >
         ${dislikeLabel}
@@ -1039,18 +951,16 @@ function createRecommendationCard(song, rank) {
   const isLiked = state.likedSongIds.has(song.id);
   const isDisliked = state.dislikedSongIds.has(song.id);
   const isBusy = state.likingSongId === song.id;
-  const isDislikeBusy = state.dislikingSongId === song.id || state.reportingSongId === song.id;
+  const isDislikeBusy = state.dislikingSongId === song.id;
   const canVote = canMutateCurrentPeriod() && !song.isLocked;
   const likeLabel = song.isLocked ? "锁定" : isBusy ? "处理中" : isLiked ? "已投" : "投票";
   const dislikeLabel = song.isLocked
     ? "锁定"
-    : state.reportingSongId === song.id
-      ? "举报中"
-      : isDislikeBusy
-        ? "处理中"
-        : isDisliked
-          ? "已踩"
-          : "踩";
+    : isDislikeBusy
+      ? "处理中"
+      : isDisliked
+        ? "已踩"
+        : "踩";
 
   return `
     <article class="recommendation-card ${song.isLocked ? "is-locked" : ""}">
@@ -1076,7 +986,7 @@ function createRecommendationCard(song, rank) {
         type="button"
         aria-pressed="${isDisliked}"
         data-dislike-song="${song.id}"
-        title="点击踩，长按举报歌曲不合规定"
+        title="点击踩并填写理由，理由会进入管理员工作区"
         ${isBusy || isDislikeBusy || !canVote ? "disabled" : ""}
       >
         <span>${song.dislikesCount || 0}</span>

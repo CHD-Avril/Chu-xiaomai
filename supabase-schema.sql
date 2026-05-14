@@ -669,11 +669,14 @@ begin
 end;
 $$;
 
+drop function if exists public.toggle_song_dislike(uuid, text, text, text);
+
 create or replace function public.toggle_song_dislike(
   p_song_id uuid,
   p_playlist_date text,
   p_voter_cookie text,
-  p_action text
+  p_action text,
+  p_reason text default null
 )
 returns table (disliked boolean, dislikes_count integer)
 language plpgsql
@@ -685,6 +688,7 @@ declare
   client_ip text;
   next_dislikes_count integer := 0;
   already_disliked boolean := false;
+  clean_reason text := btrim(coalesce(p_reason, ''));
 begin
   normalized_cookie := public.assert_valid_voter_cookie(p_voter_cookie);
   client_ip := public.request_client_ip();
@@ -692,6 +696,10 @@ begin
 
   if p_action not in ('dislike', 'undislike') then
     raise exception 'Unknown voting action.';
+  end if;
+
+  if p_action = 'dislike' and (char_length(clean_reason) < 1 or char_length(clean_reason) > 20) then
+    raise exception 'Dislike reason must be 1-20 characters.';
   end if;
 
   if not exists (
@@ -723,6 +731,12 @@ begin
 
     insert into public.song_dislikes (song_id, user_id, playlist_date, voter_cookie, voter_ip)
     values (p_song_id, normalized_cookie, p_playlist_date, normalized_cookie, client_ip);
+
+    insert into public.song_reports (song_id, playlist_date, reporter_cookie, reporter_ip, reason)
+    values (p_song_id, p_playlist_date, normalized_cookie, client_ip, clean_reason)
+    on conflict (song_id, reporter_cookie)
+    where status = 'pending'
+    do update set reason = excluded.reason;
   elsif p_action = 'undislike' then
     delete from public.song_dislikes
     where song_id = p_song_id
@@ -754,48 +768,6 @@ begin
       and playlist_date = p_playlist_date
       and voter_cookie = normalized_cookie
   ), coalesce(next_dislikes_count, 0);
-end;
-$$;
-
-create or replace function public.report_song(
-  p_song_id uuid,
-  p_playlist_date text,
-  p_voter_cookie text,
-  p_reason text default '不合规定'
-)
-returns uuid
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  normalized_cookie text;
-  client_ip text;
-  report_id uuid;
-begin
-  normalized_cookie := public.assert_valid_voter_cookie(p_voter_cookie);
-  client_ip := public.request_client_ip();
-
-  if not exists (
-    select 1
-    from public.songs song
-    join public.playlist_periods period on period.id::text = song.playlist_date
-    where song.id = p_song_id
-      and song.playlist_date = p_playlist_date
-      and coalesce(song.is_locked, false) = false
-      and period.status = 'active'
-  ) then
-    raise exception 'This song cannot be reported.';
-  end if;
-
-  insert into public.song_reports (song_id, playlist_date, reporter_cookie, reporter_ip, reason)
-  values (p_song_id, p_playlist_date, normalized_cookie, client_ip, coalesce(nullif(btrim(coalesce(p_reason, '')), ''), '不合规定'))
-  on conflict (song_id, reporter_cookie)
-  where status = 'pending'
-  do update set reason = excluded.reason
-  returning id into report_id;
-
-  return report_id;
 end;
 $$;
 
@@ -1045,8 +1017,8 @@ revoke all on function public.record_rate_limited_attempt(text, text, text, text
 revoke all on function public.get_my_likes(text, text) from public;
 revoke all on function public.get_my_dislikes(text, text) from public;
 revoke all on function public.toggle_song_like(uuid, text, text, text) from public;
-revoke all on function public.toggle_song_dislike(uuid, text, text, text) from public;
-revoke all on function public.report_song(uuid, text, text, text) from public;
+revoke all on function public.toggle_song_dislike(uuid, text, text, text, text) from public;
+drop function if exists public.report_song(uuid, text, text, text);
 revoke all on function public.review_song_report(uuid, boolean) from public;
 revoke all on function public.submit_song(text, text, text, text) from public;
 
@@ -1055,8 +1027,7 @@ grant execute on function public.is_admin_email_allowed(text) to anon, authentic
 grant execute on function public.get_my_likes(text, text) to anon, authenticated;
 grant execute on function public.get_my_dislikes(text, text) to anon, authenticated;
 grant execute on function public.toggle_song_like(uuid, text, text, text) to anon, authenticated;
-grant execute on function public.toggle_song_dislike(uuid, text, text, text) to anon, authenticated;
-grant execute on function public.report_song(uuid, text, text, text) to anon, authenticated;
+grant execute on function public.toggle_song_dislike(uuid, text, text, text, text) to anon, authenticated;
 grant execute on function public.review_song_report(uuid, boolean) to authenticated;
 grant execute on function public.submit_song(text, text, text, text) to anon, authenticated;
 grant usage on schema public to anon, authenticated;

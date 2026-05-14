@@ -1331,11 +1331,6 @@ a {
   background: rgba(245, 158, 11, 0.12);
 }
 
-.dislike-button.is-report-pressing {
-  color: #991b1b;
-  background: rgba(220, 38, 38, 0.13);
-}
-
 .song-card.is-locked {
   opacity: 0.68;
 }
