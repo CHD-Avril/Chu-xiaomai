@@ -1309,6 +1309,16 @@ a {
   font-weight: 900;
   white-space: nowrap;
   background: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.dislike-button * {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .like-button.is-liked {

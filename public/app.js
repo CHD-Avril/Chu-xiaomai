@@ -7,6 +7,7 @@ const HISTORY_PREVIEW_LIMIT = 6;
 const PERIODS_TABLE = "playlist_periods";
 const VISITOR_COOKIE_NAME = "chu_xiaomai_voter_id";
 const LEGACY_VISITOR_STORAGE_KEY = "chu_xiaomai_visitor_id";
+const REPORT_LONG_PRESS_MS = 520;
 
 const state = {
   userId: "",
@@ -136,7 +137,7 @@ if (!supabase) {
 function bindEvents() {
   refs.siteNav?.addEventListener("click", handleSiteNavClick);
   document.addEventListener("click", handleAppPageLinkClick);
-  document.addEventListener("pointerup", cancelReportPress);
+  document.addEventListener("pointerup", handleSongListPointerUp);
   document.addEventListener("pointercancel", cancelReportPress);
   document.addEventListener("pointerleave", cancelReportPress);
   window.addEventListener("hashchange", () => {
@@ -147,6 +148,7 @@ function bindEvents() {
   });
   document.addEventListener("click", handleSongListClick);
   document.addEventListener("pointerdown", handleSongListPointerDown);
+  document.addEventListener("contextmenu", handleSongListContextMenu);
   refs.form.addEventListener("submit", handleSongSubmit);
   refs.searchInput.addEventListener("input", (event) => {
     state.searchTerm = event.target.value.trim();
@@ -502,6 +504,9 @@ async function handleDislikeClick(button) {
 function handleSongListPointerDown(event) {
   const button = event.target.closest("[data-dislike-song]");
   if (!button || !state.backendReady || !canMutateCurrentPeriod()) return;
+  if (event.pointerType === "touch" || event.pointerType === "pen") {
+    event.preventDefault();
+  }
 
   const songId = button.dataset.dislikeSong;
   const song = state.songs.find((item) => item.id === songId);
@@ -517,7 +522,39 @@ function handleSongListPointerDown(event) {
       reportPressTimer = 0;
       reportPressSongId = "";
     });
-  }, 700);
+  }, REPORT_LONG_PRESS_MS);
+}
+
+function handleSongListPointerUp(event) {
+  const button = event.target.closest("[data-dislike-song]");
+  if (
+    button &&
+    reportPressTimer &&
+    (event.pointerType === "touch" || event.pointerType === "pen") &&
+    button.dataset.dislikeSong === reportPressSongId
+  ) {
+    const songId = button.dataset.dislikeSong;
+    cancelReportPress();
+    suppressDislikeClickSongId = songId;
+    handleDislikeClick(button);
+    return;
+  }
+
+  cancelReportPress();
+}
+
+function handleSongListContextMenu(event) {
+  const button = event.target.closest("[data-dislike-song]");
+  if (!button) return;
+
+  event.preventDefault();
+  const songId = button.dataset.dislikeSong;
+  const song = state.songs.find((item) => item.id === songId);
+  if (!song || song.isLocked || !state.backendReady || !canMutateCurrentPeriod()) return;
+
+  cancelReportPress();
+  suppressDislikeClickSongId = songId;
+  reportSong(songId);
 }
 
 function cancelReportPress() {
