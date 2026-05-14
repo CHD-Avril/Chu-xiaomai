@@ -1212,7 +1212,7 @@ a {
 .songs-table-header,
 .song-card {
   display: grid;
-  grid-template-columns: 58px minmax(140px, 1.35fr) minmax(120px, 1fr) 78px 104px;
+  grid-template-columns: 58px minmax(140px, 1.35fr) minmax(120px, 1fr) 92px 104px 86px;
   align-items: center;
 }
 
@@ -1240,7 +1240,8 @@ a {
 .song-title,
 .song-artist,
 .song-like-count,
-.song-card .like-button {
+.song-card .like-button,
+.song-card .dislike-button {
   min-width: 0;
   height: 100%;
   padding: 0 12px;
@@ -1296,12 +1297,41 @@ a {
   background: transparent;
 }
 
+.dislike-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 62px;
+  border-radius: 0;
+  color: #8b5b1f;
+  font-size: 0.92rem;
+  font-weight: 900;
+  white-space: nowrap;
+  background: transparent;
+}
+
 .like-button.is-liked {
   color: var(--green);
   background: rgba(22, 163, 106, 0.09);
 }
 
-.song-card .like-button:hover {
+.dislike-button.is-disliked {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.dislike-button.is-report-pressing {
+  color: #991b1b;
+  background: rgba(220, 38, 38, 0.13);
+}
+
+.song-card.is-locked {
+  opacity: 0.68;
+}
+
+.song-card .like-button:hover,
+.song-card .dislike-button:hover {
   transform: none;
   background: rgba(21, 88, 207, 0.08);
 }
@@ -3058,6 +3088,77 @@ main > section,
   line-height: 1;
 }
 
+.recommendation-dislike-button.dislike-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 42px;
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: 10px;
+  color: #8b5b1f;
+  font-size: 0.72rem;
+  font-weight: 900;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.recommendation-dislike-button.dislike-button.is-disliked {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.18);
+}
+
+.recommendation-card.is-locked,
+.song-card.is-locked {
+  opacity: 0.68;
+}
+
+.report-review-grid {
+  grid-template-columns: 1fr;
+}
+
+.report-review-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.report-review-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid rgba(14, 57, 116, 0.1);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.report-review-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.report-review-main strong,
+.report-review-main span,
+.report-review-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-review-main span,
+.report-review-main small {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.report-review-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .controls {
   grid-template-columns: minmax(0, 1fr) 116px;
   gap: 10px;
@@ -3096,10 +3197,10 @@ main > section,
 
 .songs-list .song-card {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) auto;
+  grid-template-columns: 42px minmax(0, 1fr) auto auto;
   grid-template-areas:
-    "index title action"
-    "index artist likes";
+    "index title action dislike"
+    "index artist likes likes";
   gap: 6px 10px;
   min-height: 0;
   padding: 13px;
@@ -3113,7 +3214,8 @@ main > section,
 .song-title,
 .song-artist,
 .song-like-count,
-.song-card .like-button {
+.song-card .like-button,
+.song-card .dislike-button {
   height: auto;
   padding: 0;
   border-right: 0;
@@ -3189,9 +3291,26 @@ main > section,
   background: rgba(21, 88, 207, 0.08);
 }
 
+.song-card .dislike-button {
+  grid-area: dislike;
+  justify-self: end;
+  min-width: 54px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 11px;
+  color: #8b5b1f;
+  font-size: 0.78rem;
+  background: rgba(245, 158, 11, 0.1);
+}
+
 .song-card .like-button.is-liked {
   color: var(--green);
   background: rgba(22, 163, 106, 0.12);
+}
+
+.song-card .dislike-button.is-disliked {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.18);
 }
 
 .pagination {
@@ -3392,10 +3511,10 @@ body[data-active-page="playlist"] main {
 }
 
 .songs-list .song-card {
-  grid-template-columns: 32px minmax(0, 1fr) 52px;
+  grid-template-columns: 32px minmax(0, 1fr) 52px 44px;
   grid-template-areas:
-    "index title action"
-    "index artist likes";
+    "index title action dislike"
+    "index artist likes likes";
   gap: 3px 8px;
   padding: 8px 9px;
   border-radius: 11px;
@@ -3439,6 +3558,25 @@ body[data-active-page="playlist"] main {
   padding: 0 6px;
   border-radius: 9px;
   font-size: 0;
+}
+
+.song-card .dislike-button {
+  grid-area: dislike;
+  min-width: 44px;
+  min-height: 28px;
+  padding: 0 6px;
+  border-radius: 9px;
+  font-size: 0;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.song-card .dislike-button::before {
+  content: "踩";
+  font-size: 0.72rem;
+}
+
+.song-card .dislike-button.is-disliked::before {
+  content: "已踩";
 }
 
 .song-card .like-button::before {

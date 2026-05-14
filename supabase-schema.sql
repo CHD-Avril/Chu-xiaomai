@@ -70,6 +70,10 @@ create table if not exists public.songs (
   artist_lower text not null,
   playlist_date text not null,
   likes_count integer not null default 0,
+  dislikes_count integer not null default 0,
+  is_locked boolean not null default false,
+  locked_at timestamptz,
+  locked_by text,
   created_by text not null,
   created_at timestamptz not null default now()
 );
@@ -83,6 +87,30 @@ create table if not exists public.song_likes (
   playlist_date text not null,
   created_at timestamptz not null default now(),
   unique (song_id, user_id, playlist_date)
+);
+
+create table if not exists public.song_dislikes (
+  id uuid primary key default gen_random_uuid(),
+  song_id uuid not null references public.songs(id) on delete cascade,
+  user_id text not null,
+  voter_cookie text,
+  voter_ip text,
+  playlist_date text not null,
+  created_at timestamptz not null default now(),
+  unique (song_id, user_id, playlist_date)
+);
+
+create table if not exists public.song_reports (
+  id uuid primary key default gen_random_uuid(),
+  song_id uuid not null references public.songs(id) on delete cascade,
+  playlist_date text not null,
+  reporter_cookie text not null,
+  reporter_ip text,
+  reason text not null default '不合规定',
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  reviewed_by text,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default now()
 );
 
 create table if not exists public.playlist_periods (
@@ -121,7 +149,21 @@ alter table public.song_likes
   add column if not exists voter_cookie text,
   add column if not exists voter_ip text;
 
+alter table public.songs
+  add column if not exists dislikes_count integer not null default 0,
+  add column if not exists is_locked boolean not null default false,
+  add column if not exists locked_at timestamptz,
+  add column if not exists locked_by text;
+
+alter table public.song_dislikes
+  add column if not exists voter_cookie text,
+  add column if not exists voter_ip text;
+
 update public.song_likes
+set voter_cookie = coalesce(voter_cookie, user_id)
+where voter_cookie is null;
+
+update public.song_dislikes
 set voter_cookie = coalesce(voter_cookie, user_id)
 where voter_cookie is null;
 
@@ -158,12 +200,29 @@ begin
       add constraint songs_likes_count_nonnegative
       check (likes_count >= 0) not valid;
   end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'songs_dislikes_count_nonnegative'
+      and conrelid = 'public.songs'::regclass
+  ) then
+    alter table public.songs
+      add constraint songs_dislikes_count_nonnegative
+      check (dislikes_count >= 0) not valid;
+  end if;
 end;
 $$;
 
 create index if not exists songs_playlist_date_idx on public.songs (playlist_date);
 create index if not exists songs_title_lower_idx on public.songs (title_lower);
 create index if not exists songs_artist_lower_idx on public.songs (artist_lower);
+create index if not exists songs_locked_idx on public.songs (is_locked);
+create index if not exists song_reports_status_idx on public.song_reports (status, created_at);
+alter table public.song_reports
+  drop constraint if exists song_reports_song_id_reporter_cookie_status_key;
+create unique index if not exists song_reports_pending_unique
+on public.song_reports (song_id, reporter_cookie)
+where status = 'pending';
 
 -- Merge existing duplicate submissions before enforcing the per-period
 -- title/artist uniqueness rule. The oldest row is kept and duplicate likes are
@@ -483,6 +542,30 @@ begin
 end;
 $$;
 
+create or replace function public.get_my_dislikes(
+  p_playlist_date text,
+  p_voter_cookie text
+)
+returns table (song_id uuid)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  normalized_cookie text;
+begin
+  normalized_cookie := public.assert_valid_voter_cookie(p_voter_cookie);
+
+  return query
+  select dislike_row.song_id
+  from public.song_dislikes dislike_row
+  where dislike_row.playlist_date = p_playlist_date
+    and dislike_row.voter_cookie = normalized_cookie
+  order by dislike_row.created_at desc
+  limit 500;
+end;
+$$;
+
 create or replace function public.toggle_song_like(
   p_song_id uuid,
   p_playlist_date text,
@@ -515,10 +598,11 @@ begin
     join public.playlist_periods period on period.id::text = song.playlist_date
     where song.id = p_song_id
       and song.playlist_date = p_playlist_date
+      and coalesce(song.is_locked, false) = false
       and period.status = 'active'
       and now() between period.starts_at and period.ends_at
   ) then
-    raise exception 'This song is not in an open voting period.';
+    raise exception 'This song is locked or not in an open voting period.';
   end if;
 
   select exists (
@@ -544,6 +628,11 @@ begin
       raise exception 'This browser has reached the like limit for this period.';
     end if;
 
+    delete from public.song_dislikes
+    where song_id = p_song_id
+      and playlist_date = p_playlist_date
+      and voter_cookie = normalized_cookie;
+
     insert into public.song_likes (song_id, user_id, playlist_date, voter_cookie, voter_ip)
     values (p_song_id, normalized_cookie, p_playlist_date, normalized_cookie, client_ip);
   elsif p_action = 'unlike' then
@@ -555,11 +644,17 @@ begin
 
   update public.songs
   set likes_count = (
-    select count(*)::integer
-    from public.song_likes
-    where song_id = p_song_id
-      and playlist_date = p_playlist_date
-  )
+      select count(*)::integer
+      from public.song_likes
+      where song_id = p_song_id
+        and playlist_date = p_playlist_date
+    ),
+    dislikes_count = (
+      select count(*)::integer
+      from public.song_dislikes
+      where song_id = p_song_id
+        and playlist_date = p_playlist_date
+    )
   where public.songs.id = p_song_id
   returning public.songs.likes_count into next_likes_count;
 
@@ -571,6 +666,179 @@ begin
       and playlist_date = p_playlist_date
       and voter_cookie = normalized_cookie
   ), coalesce(next_likes_count, 0);
+end;
+$$;
+
+create or replace function public.toggle_song_dislike(
+  p_song_id uuid,
+  p_playlist_date text,
+  p_voter_cookie text,
+  p_action text
+)
+returns table (disliked boolean, dislikes_count integer)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  normalized_cookie text;
+  client_ip text;
+  next_dislikes_count integer := 0;
+  already_disliked boolean := false;
+begin
+  normalized_cookie := public.assert_valid_voter_cookie(p_voter_cookie);
+  client_ip := public.request_client_ip();
+  perform public.record_rate_limited_attempt('vote', p_playlist_date, normalized_cookie, client_ip);
+
+  if p_action not in ('dislike', 'undislike') then
+    raise exception 'Unknown voting action.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.songs song
+    join public.playlist_periods period on period.id::text = song.playlist_date
+    where song.id = p_song_id
+      and song.playlist_date = p_playlist_date
+      and coalesce(song.is_locked, false) = false
+      and period.status = 'active'
+      and now() between period.starts_at and period.ends_at
+  ) then
+    raise exception 'This song is locked or not in an open voting period.';
+  end if;
+
+  select exists (
+    select 1
+    from public.song_dislikes
+    where song_id = p_song_id
+      and playlist_date = p_playlist_date
+      and voter_cookie = normalized_cookie
+  ) into already_disliked;
+
+  if p_action = 'dislike' and not already_disliked then
+    delete from public.song_likes
+    where song_id = p_song_id
+      and playlist_date = p_playlist_date
+      and voter_cookie = normalized_cookie;
+
+    insert into public.song_dislikes (song_id, user_id, playlist_date, voter_cookie, voter_ip)
+    values (p_song_id, normalized_cookie, p_playlist_date, normalized_cookie, client_ip);
+  elsif p_action = 'undislike' then
+    delete from public.song_dislikes
+    where song_id = p_song_id
+      and playlist_date = p_playlist_date
+      and voter_cookie = normalized_cookie;
+  end if;
+
+  update public.songs
+  set likes_count = (
+      select count(*)::integer
+      from public.song_likes
+      where song_id = p_song_id
+        and playlist_date = p_playlist_date
+    ),
+    dislikes_count = (
+      select count(*)::integer
+      from public.song_dislikes
+      where song_id = p_song_id
+        and playlist_date = p_playlist_date
+    )
+  where public.songs.id = p_song_id
+  returning public.songs.dislikes_count into next_dislikes_count;
+
+  return query
+  select exists (
+    select 1
+    from public.song_dislikes
+    where song_id = p_song_id
+      and playlist_date = p_playlist_date
+      and voter_cookie = normalized_cookie
+  ), coalesce(next_dislikes_count, 0);
+end;
+$$;
+
+create or replace function public.report_song(
+  p_song_id uuid,
+  p_playlist_date text,
+  p_voter_cookie text,
+  p_reason text default '不合规定'
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  normalized_cookie text;
+  client_ip text;
+  report_id uuid;
+begin
+  normalized_cookie := public.assert_valid_voter_cookie(p_voter_cookie);
+  client_ip := public.request_client_ip();
+
+  if not exists (
+    select 1
+    from public.songs song
+    join public.playlist_periods period on period.id::text = song.playlist_date
+    where song.id = p_song_id
+      and song.playlist_date = p_playlist_date
+      and coalesce(song.is_locked, false) = false
+      and period.status = 'active'
+  ) then
+    raise exception 'This song cannot be reported.';
+  end if;
+
+  insert into public.song_reports (song_id, playlist_date, reporter_cookie, reporter_ip, reason)
+  values (p_song_id, p_playlist_date, normalized_cookie, client_ip, coalesce(nullif(btrim(coalesce(p_reason, '')), ''), '不合规定'))
+  on conflict (song_id, reporter_cookie)
+  where status = 'pending'
+  do update set reason = excluded.reason
+  returning id into report_id;
+
+  return report_id;
+end;
+$$;
+
+create or replace function public.review_song_report(
+  p_report_id uuid,
+  p_approve boolean
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  report_record record;
+begin
+  if public.is_current_user_admin() is not true then
+    raise exception 'Admin permission required.';
+  end if;
+
+  select *
+  into report_record
+  from public.song_reports
+  where id = p_report_id
+    and status = 'pending'
+  for update;
+
+  if not found then
+    raise exception 'Pending report not found.';
+  end if;
+
+  update public.song_reports
+  set status = case when p_approve then 'approved' else 'rejected' end,
+    reviewed_by = auth.uid()::text,
+    reviewed_at = now()
+  where id = p_report_id;
+
+  if p_approve then
+    update public.songs
+    set is_locked = true,
+      locked_at = now(),
+      locked_by = auth.uid()::text
+    where id = report_record.song_id;
+  end if;
 end;
 $$;
 
@@ -689,6 +957,8 @@ alter table public.admin_users enable row level security;
 alter table public.security_settings enable row level security;
 alter table public.songs enable row level security;
 alter table public.song_likes enable row level security;
+alter table public.song_dislikes enable row level security;
+alter table public.song_reports enable row level security;
 alter table public.playlist_periods enable row level security;
 alter table public.announcements enable row level security;
 alter table public.vote_attempts enable row level security;
@@ -729,6 +999,8 @@ drop policy if exists "security_settings_update_admin" on public.security_settin
 drop policy if exists "songs_select_public" on public.songs;
 drop policy if exists "songs_select_admin" on public.songs;
 drop policy if exists "song_likes_select_admin" on public.song_likes;
+drop policy if exists "song_dislikes_select_admin" on public.song_dislikes;
+drop policy if exists "song_reports_select_admin" on public.song_reports;
 drop policy if exists "playlist_periods_select_public" on public.playlist_periods;
 drop policy if exists "playlist_periods_insert_admin" on public.playlist_periods;
 drop policy if exists "playlist_periods_update_admin" on public.playlist_periods;
@@ -742,11 +1014,13 @@ revoke all on table public.admin_users from anon, authenticated;
 revoke all on table public.security_settings from anon, authenticated;
 revoke all on table public.songs from anon, authenticated;
 revoke all on table public.song_likes from anon, authenticated;
+revoke all on table public.song_dislikes from anon, authenticated;
+revoke all on table public.song_reports from anon, authenticated;
 revoke all on table public.playlist_periods from anon, authenticated;
 revoke all on table public.announcements from anon, authenticated;
 revoke all on table public.vote_attempts from anon, authenticated;
 
-grant select (id, title, artist, title_lower, artist_lower, playlist_date, likes_count, created_at)
+grant select (id, title, artist, title_lower, artist_lower, playlist_date, likes_count, dislikes_count, is_locked, created_at)
 on public.songs to anon, authenticated;
 
 grant select (id, title, starts_at, ends_at, status, created_at, updated_at, archived_at)
@@ -758,6 +1032,8 @@ on public.announcements to anon, authenticated;
 grant insert, update, delete on public.announcements to authenticated;
 
 grant select on public.song_likes to authenticated;
+grant select on public.song_dislikes to authenticated;
+grant select on public.song_reports to authenticated;
 grant select, insert, update, delete on public.admin_users to authenticated;
 grant select, update on public.security_settings to authenticated;
 
@@ -767,13 +1043,21 @@ revoke all on function public.request_client_ip() from public;
 revoke all on function public.assert_valid_voter_cookie(text) from public;
 revoke all on function public.record_rate_limited_attempt(text, text, text, text) from public;
 revoke all on function public.get_my_likes(text, text) from public;
+revoke all on function public.get_my_dislikes(text, text) from public;
 revoke all on function public.toggle_song_like(uuid, text, text, text) from public;
+revoke all on function public.toggle_song_dislike(uuid, text, text, text) from public;
+revoke all on function public.report_song(uuid, text, text, text) from public;
+revoke all on function public.review_song_report(uuid, boolean) from public;
 revoke all on function public.submit_song(text, text, text, text) from public;
 
 grant execute on function public.is_current_user_admin() to anon, authenticated;
 grant execute on function public.is_admin_email_allowed(text) to anon, authenticated;
 grant execute on function public.get_my_likes(text, text) to anon, authenticated;
+grant execute on function public.get_my_dislikes(text, text) to anon, authenticated;
 grant execute on function public.toggle_song_like(uuid, text, text, text) to anon, authenticated;
+grant execute on function public.toggle_song_dislike(uuid, text, text, text) to anon, authenticated;
+grant execute on function public.report_song(uuid, text, text, text) to anon, authenticated;
+grant execute on function public.review_song_report(uuid, boolean) to authenticated;
 grant execute on function public.submit_song(text, text, text, text) to anon, authenticated;
 grant usage on schema public to anon, authenticated;
 
@@ -811,6 +1095,18 @@ using (true);
 
 create policy "song_likes_select_admin"
 on public.song_likes
+for select
+to authenticated
+using (public.is_current_user_admin());
+
+create policy "song_dislikes_select_admin"
+on public.song_dislikes
+for select
+to authenticated
+using (public.is_current_user_admin());
+
+create policy "song_reports_select_admin"
+on public.song_reports
 for select
 to authenticated
 using (public.is_current_user_admin());

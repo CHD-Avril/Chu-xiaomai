@@ -15,16 +15,21 @@ const state = {
   recommendationPeriodId: "",
   recommendationDateKey: "",
   likedSongIds: new Set(),
+  dislikedSongIds: new Set(),
   periods: [],
   currentPeriod: null,
   historyPeriodId: "",
   historySongs: [],
+  songReports: [],
   sortMode: "likes",
   searchTerm: "",
   currentPage: 1,
   activePage: "home",
   isSubmitting: false,
   likingSongId: "",
+  dislikingSongId: "",
+  reportingSongId: "",
+  reviewingReportId: "",
   backendReady: false,
   isAdminAuthenticated: false,
   adminUser: null,
@@ -88,12 +93,19 @@ const refs = {
   copyExportBtn: document.querySelector("#copyExportBtn"),
   downloadExportBtn: document.querySelector("#downloadExportBtn"),
   exportHint: document.querySelector("#exportHint"),
+  reportReviewPanel: document.querySelector("#reportReviewPanel"),
+  reportReviewList: document.querySelector("#reportReviewList"),
+  reportReviewHint: document.querySelector("#reportReviewHint"),
   announcementModal: document.querySelector("#announcementModal"),
   announcementModalTitle: document.querySelector("#announcementModalTitle"),
   announcementModalContent: document.querySelector("#announcementModalContent"),
   announcementCloseBtn: document.querySelector("#announcementCloseBtn"),
   announcementAckBtn: document.querySelector("#announcementAckBtn"),
 };
+
+let reportPressTimer = 0;
+let reportPressSongId = "";
+let suppressDislikeClickSongId = "";
 
 const supabase = hasValidSupabaseConfig()
   ? createClient(supabaseConfig.url, supabaseConfig.anonKey, {
@@ -108,6 +120,7 @@ const supabase = hasValidSupabaseConfig()
 let authListenerBound = false;
 
 setupRecommendationsPanel();
+setupReportReviewPanel();
 setActivePage(getPageFromHash(window.location.hash), { updateHash: false, scroll: false });
 updateHeroPeriodLabel("正在读取征集期", "");
 bindEvents();
@@ -123,6 +136,9 @@ if (!supabase) {
 function bindEvents() {
   refs.siteNav?.addEventListener("click", handleSiteNavClick);
   document.addEventListener("click", handleAppPageLinkClick);
+  document.addEventListener("pointerup", cancelReportPress);
+  document.addEventListener("pointercancel", cancelReportPress);
+  document.addEventListener("pointerleave", cancelReportPress);
   window.addEventListener("hashchange", () => {
     setActivePage(getPageFromHash(window.location.hash), { updateHash: false, scroll: false });
   });
@@ -130,6 +146,7 @@ function bindEvents() {
     setActivePage(getPageFromHash(window.location.hash), { updateHash: false, scroll: false });
   });
   document.addEventListener("click", handleSongListClick);
+  document.addEventListener("pointerdown", handleSongListPointerDown);
   refs.form.addEventListener("submit", handleSongSubmit);
   refs.searchInput.addEventListener("input", (event) => {
     state.searchTerm = event.target.value.trim();
@@ -158,6 +175,7 @@ function bindEvents() {
   refs.disableAnnouncementBtn.addEventListener("click", handleDisableAnnouncement);
   refs.copyExportBtn.addEventListener("click", handleCopyExport);
   refs.downloadExportBtn.addEventListener("click", handleDownloadExport);
+  refs.reportReviewList?.addEventListener("click", handleReportReviewClick);
   refs.announcementCloseBtn.addEventListener("click", closeAnnouncementModal);
   refs.announcementAckBtn.addEventListener("click", closeAnnouncementModal);
   refs.announcementModal.addEventListener("click", (event) => {
@@ -283,6 +301,7 @@ async function syncPeriods() {
     state.recommendationPeriodId = "";
     state.recommendationDateKey = "";
     state.likedSongIds = new Set();
+    state.dislikedSongIds = new Set();
   }
   renderPeriodAdminState();
   renderHistoryList();
@@ -295,21 +314,28 @@ async function syncAllData() {
     state.recommendationPeriodId = "";
     state.recommendationDateKey = "";
     state.likedSongIds = new Set();
+    state.dislikedSongIds = new Set();
     render();
     return;
   }
 
-  const [songs, likes] = await Promise.all([fetchSongs(state.currentPeriod.id), fetchLikes()]);
+  const [songs, likes, dislikes] = await Promise.all([
+    fetchSongs(state.currentPeriod.id),
+    fetchLikes(),
+    fetchDislikes(),
+  ]);
   state.songs = songs;
   ensureDailyRecommendations();
   state.likedSongIds = new Set(likes.map((item) => item.song_id));
+  state.dislikedSongIds = new Set(dislikes.map((item) => item.song_id));
+  if (state.isAdminAuthenticated) await fetchReports();
   render();
 }
 
 async function fetchSongs(periodId) {
   const { data, error } = await supabase
     .from(supabaseConfig.tables.songs)
-    .select("id,title,artist,title_lower,artist_lower,playlist_date,likes_count,created_at")
+    .select("id,title,artist,title_lower,artist_lower,playlist_date,likes_count,dislikes_count,is_locked,created_at")
     .eq("playlist_date", periodId)
     .limit(500);
   if (error) throw error;
@@ -319,6 +345,16 @@ async function fetchSongs(periodId) {
 async function fetchLikes() {
   if (!state.currentPeriod) return [];
   const { data, error } = await supabase.rpc("get_my_likes", {
+    p_playlist_date: state.currentPeriod.id,
+    p_voter_cookie: state.userId,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function fetchDislikes() {
+  if (!state.currentPeriod) return [];
+  const { data, error } = await supabase.rpc("get_my_dislikes", {
     p_playlist_date: state.currentPeriod.id,
     p_voter_cookie: state.userId,
   });
@@ -377,8 +413,18 @@ async function handleSongSubmit(event) {
 }
 
 async function handleSongListClick(event) {
+  const dislikeButton = event.target.closest("[data-dislike-song]");
+  if (dislikeButton) {
+    if (suppressDislikeClickSongId === dislikeButton.dataset.dislikeSong) {
+      suppressDislikeClickSongId = "";
+      return;
+    }
+    await handleDislikeClick(dislikeButton);
+    return;
+  }
+
   const button = event.target.closest("[data-like-song]");
-  if (!button || state.likingSongId || !state.backendReady) return;
+  if (!button || state.likingSongId || state.dislikingSongId || !state.backendReady) return;
   if (!canMutateCurrentPeriod()) {
     const message = getReadOnlyMessage();
     updateFormHint(message, true);
@@ -390,6 +436,11 @@ async function handleSongListClick(event) {
   const songId = button.dataset.likeSong;
   const song = state.songs.find((item) => item.id === songId);
   if (!song) return;
+  if (song.isLocked) {
+    alert("这首歌已被管理员锁定，不能继续投票。");
+    render();
+    return;
+  }
 
   state.likingSongId = songId;
   render();
@@ -410,6 +461,77 @@ async function handleSongListClick(event) {
   }
 }
 
+async function handleDislikeClick(button) {
+  if (!button || state.likingSongId || state.dislikingSongId || !state.backendReady) return;
+  if (!canMutateCurrentPeriod()) {
+    const message = getReadOnlyMessage();
+    updateFormHint(message, true);
+    if (button.closest("#recommendationsPanel")) alert(message);
+    render();
+    return;
+  }
+
+  const songId = button.dataset.dislikeSong;
+  const song = state.songs.find((item) => item.id === songId);
+  if (!song) return;
+  if (song.isLocked) {
+    alert("这首歌已被管理员锁定，不能继续投票。");
+    render();
+    return;
+  }
+
+  state.dislikingSongId = songId;
+  render();
+
+  try {
+    if (state.dislikedSongIds.has(songId)) {
+      await undislikeSong(songId);
+    } else {
+      await dislikeSong(songId);
+    }
+    await syncAllData();
+  } catch (error) {
+    console.error("踩投票失败:", error);
+    alert(`操作失败：${resolveErrorMessage(error)}`);
+  } finally {
+    state.dislikingSongId = "";
+    render();
+  }
+}
+
+function handleSongListPointerDown(event) {
+  const button = event.target.closest("[data-dislike-song]");
+  if (!button || !state.backendReady || !canMutateCurrentPeriod()) return;
+
+  const songId = button.dataset.dislikeSong;
+  const song = state.songs.find((item) => item.id === songId);
+  if (!song || song.isLocked) return;
+
+  cancelReportPress();
+  reportPressSongId = songId;
+  button.classList.add("is-report-pressing");
+  reportPressTimer = window.setTimeout(() => {
+    suppressDislikeClickSongId = songId;
+    reportSong(songId).finally(() => {
+      button.classList.remove("is-report-pressing");
+      reportPressTimer = 0;
+      reportPressSongId = "";
+    });
+  }, 700);
+}
+
+function cancelReportPress() {
+  if (!reportPressTimer) return;
+  window.clearTimeout(reportPressTimer);
+  reportPressTimer = 0;
+  if (reportPressSongId) {
+    document.querySelectorAll(`[data-dislike-song="${CSS.escape(reportPressSongId)}"]`).forEach((button) => {
+      button.classList.remove("is-report-pressing");
+    });
+  }
+  reportPressSongId = "";
+}
+
 async function likeSong(songId) {
   const { error } = await supabase.rpc("toggle_song_like", {
     p_song_id: songId,
@@ -428,6 +550,52 @@ async function unlikeSong(songId) {
     p_action: "unlike",
   });
   if (error) throw error;
+}
+
+async function dislikeSong(songId) {
+  const { error } = await supabase.rpc("toggle_song_dislike", {
+    p_song_id: songId,
+    p_playlist_date: state.currentPeriod.id,
+    p_voter_cookie: state.userId,
+    p_action: "dislike",
+  });
+  if (error) throw error;
+}
+
+async function undislikeSong(songId) {
+  const { error } = await supabase.rpc("toggle_song_dislike", {
+    p_song_id: songId,
+    p_playlist_date: state.currentPeriod.id,
+    p_voter_cookie: state.userId,
+    p_action: "undislike",
+  });
+  if (error) throw error;
+}
+
+async function reportSong(songId) {
+  if (state.reportingSongId) return;
+  const song = state.songs.find((item) => item.id === songId);
+  if (!song || song.isLocked) return;
+
+  state.reportingSongId = songId;
+  render();
+  try {
+    const { error } = await supabase.rpc("report_song", {
+      p_song_id: songId,
+      p_playlist_date: state.currentPeriod.id,
+      p_voter_cookie: state.userId,
+      p_reason: "不合规定",
+    });
+    if (error) throw error;
+    alert("已提交举报，管理员会在后台审查。");
+    if (state.isAdminAuthenticated) await fetchReports();
+  } catch (error) {
+    console.error("举报歌曲失败:", error);
+    alert(`举报失败：${resolveErrorMessage(error)}`);
+  } finally {
+    state.reportingSongId = "";
+    render();
+  }
 }
 
 function handlePaginationClick(event) {
@@ -489,6 +657,7 @@ function render() {
         <span>歌手</span>
         <span>喜欢</span>
         <span>操作</span>
+        <span>踩</span>
       </div>
       ${currentSongs.map((song, index) => createSongCard(song, startIndex + index + 1)).join("")}
     `;
@@ -569,6 +738,116 @@ function setupRecommendationsPanel() {
   playlistPanel.before(panel);
   refs.recommendationsPanel = panel;
   refs.recommendationsList = panel.querySelector("#recommendationsList");
+}
+
+function setupReportReviewPanel() {
+  if (refs.reportReviewPanel && refs.reportReviewList && refs.reportReviewHint) return;
+
+  const adminPanel = document.querySelector("#adminPanel");
+  if (!adminPanel) return;
+
+  const panel = document.createElement("div");
+  panel.className = "report-review-panel admin-block";
+  panel.id = "reportReviewPanel";
+  panel.innerHTML = `
+    <p class="section-tag">Reports</p>
+    <h3>举报审查</h3>
+    <p class="section-note">同意举报后，歌曲会被锁定，不能继续赞、踩或取消投票。</p>
+    <div id="reportReviewList" class="report-review-list"></div>
+    <p class="form-hint" id="reportReviewHint">暂无待审查举报。</p>
+  `;
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "admin-grid report-review-grid";
+  wrapper.appendChild(panel);
+  adminPanel.appendChild(wrapper);
+
+  refs.reportReviewPanel = panel;
+  refs.reportReviewList = panel.querySelector("#reportReviewList");
+  refs.reportReviewHint = panel.querySelector("#reportReviewHint");
+}
+
+async function fetchReports() {
+  if (!state.isAdminAuthenticated) return;
+  try {
+    const { data, error } = await supabase
+      .from("song_reports")
+      .select("id,song_id,playlist_date,reason,status,created_at,song:songs(title,artist,likes_count,dislikes_count,is_locked)")
+      .eq("status", "pending")
+      .order("created_at", { ascending: true })
+      .limit(100);
+    if (error) throw error;
+    state.songReports = data ?? [];
+    renderReportReview();
+  } catch (error) {
+    console.error("读取举报失败:", error);
+    state.songReports = [];
+    renderReportReview(`读取举报失败：${resolveErrorMessage(error)}`, true);
+  }
+}
+
+function renderReportReview(message = "", isError = false) {
+  if (!refs.reportReviewList || !refs.reportReviewHint) return;
+  if (!state.songReports.length) {
+    refs.reportReviewList.innerHTML = `<div class="empty-inline">暂无待审查举报。</div>`;
+    updateReportReviewHint(message || "暂无待审查举报。", isError);
+    return;
+  }
+
+  refs.reportReviewList.innerHTML = state.songReports
+    .map((report) => {
+      const song = report.song || {};
+      const isBusy = state.reviewingReportId === report.id;
+      return `
+        <article class="report-review-row">
+          <div class="report-review-main">
+            <strong>${escapeHtml(song.title || "未知歌曲")} - ${escapeHtml(song.artist || "未知歌手")}</strong>
+            <span>${escapeHtml(report.reason || "不合规定")} · ${escapeHtml(formatDateTime(Date.parse(report.created_at ?? "") || 0))}</span>
+            <small>赞 ${song.likes_count || 0} / 踩 ${song.dislikes_count || 0}${song.is_locked ? " · 已锁定" : ""}</small>
+          </div>
+          <div class="report-review-actions">
+            <button class="primary-button compact-button" type="button" data-review-report="${report.id}" data-review-action="approve" ${isBusy ? "disabled" : ""}>同意并锁定</button>
+            <button class="primary-button secondary-btn compact-button" type="button" data-review-report="${report.id}" data-review-action="reject" ${isBusy ? "disabled" : ""}>驳回</button>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+  updateReportReviewHint(message || `待审查举报 ${state.songReports.length} 条。`, isError);
+}
+
+function updateReportReviewHint(message, isError) {
+  if (!refs.reportReviewHint) return;
+  refs.reportReviewHint.textContent = message;
+  refs.reportReviewHint.style.color = isError ? "var(--danger)" : "var(--muted)";
+}
+
+async function handleReportReviewClick(event) {
+  const button = event.target.closest("[data-review-report]");
+  if (!button || !state.isAdminAuthenticated || state.reviewingReportId) return;
+
+  const reportId = button.dataset.reviewReport;
+  const approve = button.dataset.reviewAction === "approve";
+  if (approve && !confirm("同意后这首歌会被锁定，并且不能再进行投票。确定同意吗？")) return;
+
+  state.reviewingReportId = reportId;
+  renderReportReview("正在处理举报...", false);
+  try {
+    const { error } = await supabase.rpc("review_song_report", {
+      p_report_id: reportId,
+      p_approve: approve,
+    });
+    if (error) throw error;
+    await fetchReports();
+    await syncAllData();
+    updateReportReviewHint(approve ? "已同意举报并锁定歌曲。" : "已驳回举报。", false);
+  } catch (error) {
+    console.error("处理举报失败:", error);
+    updateReportReviewHint(`处理失败：${resolveErrorMessage(error)}`, true);
+  } finally {
+    state.reviewingReportId = "";
+    renderReportReview();
+  }
 }
 
 function getDailyRecommendationKey() {
@@ -659,23 +938,43 @@ function sortByTime(firstSong, secondSong) {
 
 function createSongCard(song, rank) {
   const isLiked = state.likedSongIds.has(song.id);
+  const isDisliked = state.dislikedSongIds.has(song.id);
   const isBusy = state.likingSongId === song.id;
-  const canLike = canMutateCurrentPeriod();
-  const likeLabel = isBusy ? "处理中" : isLiked ? `已喜欢 ${song.likesCount}` : `喜欢 ${song.likesCount}`;
+  const isDislikeBusy = state.dislikingSongId === song.id || state.reportingSongId === song.id;
+  const canVote = canMutateCurrentPeriod() && !song.isLocked;
+  const likeLabel = song.isLocked ? "已锁定" : isBusy ? "处理中" : isLiked ? `已喜欢 ${song.likesCount}` : `喜欢 ${song.likesCount}`;
+  const dislikeLabel = song.isLocked
+    ? "锁定"
+    : state.reportingSongId === song.id
+      ? "举报中"
+      : isDislikeBusy
+        ? "处理中"
+        : isDisliked
+          ? `已踩 ${song.dislikesCount}`
+          : `踩 ${song.dislikesCount}`;
 
   return `
-    <article class="song-card">
+    <article class="song-card ${song.isLocked ? "is-locked" : ""}">
       <div class="song-index">${String(rank).padStart(2, "0")}</div>
       <div class="song-title" title="${escapeHtml(song.title)}">${escapeHtml(song.title)}</div>
       <div class="song-artist" title="${escapeHtml(song.artist)}">${escapeHtml(song.artist)}</div>
-      <div class="song-like-count">${song.likesCount || 0}</div>
+      <div class="song-like-count" title="赞 / 踩">${song.likesCount || 0} / ${song.dislikesCount || 0}</div>
       <button
         class="like-button ${isLiked ? "is-liked" : ""}"
         type="button"
         data-like-song="${song.id}"
-        ${isBusy || !canLike ? "disabled" : ""}
+        ${isBusy || isDislikeBusy || !canVote ? "disabled" : ""}
       >
         ${likeLabel}
+      </button>
+      <button
+        class="dislike-button ${isDisliked ? "is-disliked" : ""}"
+        type="button"
+        data-dislike-song="${song.id}"
+        title="点击踩，长按举报歌曲不合规定"
+        ${isBusy || isDislikeBusy || !canVote ? "disabled" : ""}
+      >
+        ${dislikeLabel}
       </button>
     </article>
   `;
@@ -701,12 +1000,23 @@ function createLegacyRecommendationCard(song, rank) {
 
 function createRecommendationCard(song, rank) {
   const isLiked = state.likedSongIds.has(song.id);
+  const isDisliked = state.dislikedSongIds.has(song.id);
   const isBusy = state.likingSongId === song.id;
-  const canLike = canMutateCurrentPeriod();
-  const likeLabel = isBusy ? "处理中" : isLiked ? "已投" : "投票";
+  const isDislikeBusy = state.dislikingSongId === song.id || state.reportingSongId === song.id;
+  const canVote = canMutateCurrentPeriod() && !song.isLocked;
+  const likeLabel = song.isLocked ? "锁定" : isBusy ? "处理中" : isLiked ? "已投" : "投票";
+  const dislikeLabel = song.isLocked
+    ? "锁定"
+    : state.reportingSongId === song.id
+      ? "举报中"
+      : isDislikeBusy
+        ? "处理中"
+        : isDisliked
+          ? "已踩"
+          : "踩";
 
   return `
-    <article class="recommendation-card" data-like-song="${song.id}">
+    <article class="recommendation-card ${song.isLocked ? "is-locked" : ""}">
       <span class="recommendation-rank">${String(rank).padStart(2, "0")}</span>
       <div class="recommendation-main">
         <strong title="${escapeHtml(song.title)}">${escapeHtml(song.title)}</strong>
@@ -717,11 +1027,23 @@ function createRecommendationCard(song, rank) {
         type="button"
         aria-pressed="${isLiked}"
         data-like-song="${song.id}"
-        aria-disabled="${isBusy || !canLike}"
+        aria-disabled="${isBusy || isDislikeBusy || !canVote}"
+        ${isBusy || isDislikeBusy || !canVote ? "disabled" : ""}
       >
         <span class="recommendation-like-heart" aria-hidden="true">♥</span>
         <span class="recommendation-like-count">${song.likesCount || 0}</span>
         <span class="recommendation-like-text">${likeLabel}</span>
+      </button>
+      <button
+        class="recommendation-dislike-button dislike-button ${isDisliked ? "is-disliked" : ""}"
+        type="button"
+        aria-pressed="${isDisliked}"
+        data-dislike-song="${song.id}"
+        title="点击踩，长按举报歌曲不合规定"
+        ${isBusy || isDislikeBusy || !canVote ? "disabled" : ""}
+      >
+        <span>${song.dislikesCount || 0}</span>
+        <span>${dislikeLabel}</span>
       </button>
     </article>
   `;
@@ -873,6 +1195,7 @@ function setAdminUi(isAuthenticated, user = null) {
   renderPeriodAdminState();
   renderHistoryList();
   loadCurrentAnnouncementToForm();
+  fetchReports();
 }
 
 async function handleAdminLogin(event) {
@@ -1409,6 +1732,8 @@ function mapSongs(data) {
     titleLower: song.title_lower ?? normalizeText(song.title ?? ""),
     artistLower: song.artist_lower ?? normalizeText(song.artist ?? ""),
     likesCount: Number.isFinite(song.likes_count) ? song.likes_count : 0,
+    dislikesCount: Number.isFinite(song.dislikes_count) ? song.dislikes_count : 0,
+    isLocked: song.is_locked === true,
     createdAtMs: Date.parse(song.created_at ?? "") || 0,
     createdBy: song.created_by ?? "",
   }));
