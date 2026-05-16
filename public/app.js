@@ -92,6 +92,7 @@ const refs = {
   exportCountInput: document.querySelector("#exportCountInput"),
   copyExportBtn: document.querySelector("#copyExportBtn"),
   downloadExportBtn: document.querySelector("#downloadExportBtn"),
+  downloadCurrentPeriodDataBtn: document.querySelector("#downloadCurrentPeriodDataBtn"),
   exportHint: document.querySelector("#exportHint"),
   reportReviewPanel: document.querySelector("#reportReviewPanel"),
   reportReviewList: document.querySelector("#reportReviewList"),
@@ -167,6 +168,7 @@ function bindEvents() {
   refs.disableAnnouncementBtn.addEventListener("click", handleDisableAnnouncement);
   refs.copyExportBtn.addEventListener("click", handleCopyExport);
   refs.downloadExportBtn.addEventListener("click", handleDownloadExport);
+  refs.downloadCurrentPeriodDataBtn?.addEventListener("click", handleDownloadCurrentPeriodData);
   refs.reportReviewList?.addEventListener("click", handleReportReviewClick);
   refs.announcementCloseBtn.addEventListener("click", closeAnnouncementModal);
   refs.announcementAckBtn.addEventListener("click", closeAnnouncementModal);
@@ -1574,6 +1576,40 @@ function handleDownloadExport() {
   updateExportHint("TXT 已开始下载。", false);
 }
 
+async function handleDownloadCurrentPeriodData() {
+  if (!state.isAdminAuthenticated) {
+    alert("请先登录管理员账号。");
+    return;
+  }
+  if (!state.currentPeriod?.id) {
+    updateExportHint("当前没有可导出的征集期。", true);
+    return;
+  }
+
+  const button = refs.downloadCurrentPeriodDataBtn;
+  if (button) button.disabled = true;
+  updateExportHint("正在读取当前征集期明细数据...", false);
+
+  try {
+    const exportData = await buildCurrentPeriodDataExport();
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `chu_xiaomai_${sanitizeFilename(exportData.period.title)}_${formatDateForFilename(new Date())}_anti_cheat.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    updateExportHint("当前征集期明细 JSON 已开始下载。", false);
+  } catch (error) {
+    console.error("导出当前征集期数据失败:", error);
+    updateExportHint(`导出失败：${resolveErrorMessage(error)}`, true);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 function buildExportText() {
   const exportSongs = getExportSongs();
   if (!exportSongs.length) {
@@ -1614,6 +1650,172 @@ function getExportSongs() {
       return likeGap || sortByTime(firstSong, secondSong);
     })
     .slice(0, exportCount);
+}
+
+async function buildCurrentPeriodDataExport() {
+  const period = state.currentPeriod;
+  const periodId = period.id;
+  const [songs, likes, dislikes, reports] = await Promise.all([
+    fetchSongs(periodId),
+    fetchVoteRows("song_likes", periodId),
+    fetchVoteRows("song_dislikes", periodId),
+    fetchReportRows(periodId),
+  ]);
+  const songsById = new Map(songs.map((song) => [song.id, song]));
+  const likeStatsByCookie = buildActorStats(likes, "voter_cookie");
+  const likeStatsByIp = buildActorStats(likes, "voter_ip");
+  const dislikeStatsByCookie = buildActorStats(dislikes, "voter_cookie");
+  const dislikeStatsByIp = buildActorStats(dislikes, "voter_ip");
+
+  return {
+    exportedAt: new Date().toISOString(),
+    exportedBy: state.adminUser?.email || state.adminUser?.id || "",
+    purpose: "Current period anti-cheat review",
+    period: {
+      id: period.id,
+      title: period.title,
+      status: period.status,
+      startsAt: new Date(period.startsAt).toISOString(),
+      endsAt: new Date(period.endsAt).toISOString(),
+      rangeLabel: formatPeriodRange(period),
+    },
+    totals: {
+      songs: songs.length,
+      likes: likes.length,
+      dislikes: dislikes.length,
+      reports: reports.length,
+      uniqueLikeCookies: likeStatsByCookie.length,
+      uniqueLikeIps: likeStatsByIp.length,
+      uniqueDislikeCookies: dislikeStatsByCookie.length,
+      uniqueDislikeIps: dislikeStatsByIp.length,
+    },
+    suspiciousSummary: {
+      highLikeCookies: likeStatsByCookie.filter((item) => item.total >= 5),
+      highLikeIps: likeStatsByIp.filter((item) => item.total >= 10),
+      highDislikeCookies: dislikeStatsByCookie.filter((item) => item.total >= 3),
+      highDislikeIps: dislikeStatsByIp.filter((item) => item.total >= 8),
+    },
+    songs: songs
+      .sort(sortByLikes)
+      .map((song) => ({
+        id: song.id,
+        title: song.title,
+        artist: song.artist,
+        likesCount: song.likesCount,
+        dislikesCount: song.dislikesCount,
+        isLocked: song.isLocked,
+        createdAt: song.createdAtMs ? new Date(song.createdAtMs).toISOString() : "",
+        createdBy: song.createdBy,
+      })),
+    likes: likes.map((row) => enrichVoteRow(row, songsById)),
+    dislikes: dislikes.map((row) => enrichVoteRow(row, songsById)),
+    reports: reports.map((row) => enrichReportRow(row, songsById)),
+    aggregates: {
+      likesByCookie: likeStatsByCookie,
+      likesByIp: likeStatsByIp,
+      dislikesByCookie: dislikeStatsByCookie,
+      dislikesByIp: dislikeStatsByIp,
+    },
+  };
+}
+
+async function fetchVoteRows(tableName, periodId) {
+  const { data, error } = await supabase
+    .from(tableName)
+    .select("id,song_id,user_id,voter_cookie,voter_ip,playlist_date,created_at")
+    .eq("playlist_date", periodId)
+    .order("created_at", { ascending: true })
+    .limit(5000);
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function fetchReportRows(periodId) {
+  const { data, error } = await supabase
+    .from("song_reports")
+    .select("id,song_id,playlist_date,reporter_cookie,reporter_ip,reason,status,reviewed_by,reviewed_at,created_at")
+    .eq("playlist_date", periodId)
+    .order("created_at", { ascending: true })
+    .limit(5000);
+  if (error) throw error;
+  return data ?? [];
+}
+
+function buildActorStats(rows, fieldName) {
+  const stats = new Map();
+  rows.forEach((row) => {
+    const key = row[fieldName] || "unknown";
+    const item = stats.get(key) || {
+      value: key,
+      total: 0,
+      uniqueSongs: new Set(),
+      firstAt: row.created_at || "",
+      lastAt: row.created_at || "",
+    };
+    item.total += 1;
+    if (row.song_id) item.uniqueSongs.add(row.song_id);
+    if (row.created_at && (!item.firstAt || row.created_at < item.firstAt)) item.firstAt = row.created_at;
+    if (row.created_at && (!item.lastAt || row.created_at > item.lastAt)) item.lastAt = row.created_at;
+    stats.set(key, item);
+  });
+
+  return [...stats.values()]
+    .map((item) => ({
+      value: item.value,
+      total: item.total,
+      uniqueSongs: item.uniqueSongs.size,
+      firstAt: item.firstAt,
+      lastAt: item.lastAt,
+    }))
+    .sort((first, second) => second.total - first.total || first.value.localeCompare(second.value));
+}
+
+function enrichVoteRow(row, songsById) {
+  const song = songsById.get(row.song_id);
+  return {
+    id: row.id,
+    songId: row.song_id,
+    songTitle: song?.title || "",
+    songArtist: song?.artist || "",
+    voterCookie: row.voter_cookie || "",
+    voterIp: row.voter_ip || "",
+    userId: row.user_id || "",
+    createdAt: row.created_at || "",
+  };
+}
+
+function enrichReportRow(row, songsById) {
+  const song = songsById.get(row.song_id);
+  return {
+    id: row.id,
+    songId: row.song_id,
+    songTitle: song?.title || "",
+    songArtist: song?.artist || "",
+    reporterCookie: row.reporter_cookie || "",
+    reporterIp: row.reporter_ip || "",
+    reason: row.reason || "",
+    status: row.status || "",
+    reviewedBy: row.reviewed_by || "",
+    reviewedAt: row.reviewed_at || "",
+    createdAt: row.created_at || "",
+  };
+}
+
+function sanitizeFilename(value) {
+  return String(value || "current_period")
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "_")
+    .replace(/\s+/g, "_")
+    .slice(0, 80) || "current_period";
+}
+
+function formatDateForFilename(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  return `${year}${month}${day}_${hour}${minute}`;
 }
 
 async function copyTextToClipboard(text) {
