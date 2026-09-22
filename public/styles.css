@@ -3632,3 +3632,255 @@ body[data-active-page="playlist"] main {
   border-radius: 14px !important;
   font-size: 0.72rem !important;
 }
+/* Interaction polish from the latest product brief */
+main > section,
+.stat-card,
+.notice-board-item,
+.submission-period-card {
+  animation: page-fade-up 0.34s ease both;
+}
+
+.songs-list {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.songs-list.is-updating {
+  opacity: 0.64;
+  transform: translateY(4px);
+}
+
+.song-card,
+.recommendation-card {
+  will-change: transform, opacity;
+}
+
+.like-button.is-pulsing,
+.dislike-button.is-pulsing,
+.recommendation-like-button.is-pulsing,
+.recommendation-dislike-button.is-pulsing {
+  animation: vote-pop 0.56s ease;
+}
+
+.like-button.is-pulsing,
+.recommendation-like-button.is-pulsing {
+  color: var(--green);
+}
+
+.recommendations-list {
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.recommendation-card {
+  scroll-snap-align: start;
+}
+
+.recommendations-list.is-dragging {
+  cursor: grabbing;
+  scroll-snap-type: none;
+  user-select: none;
+}
+
+.recommendation-scroll-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: center;
+  min-width: max-content;
+  padding: 4px;
+  scroll-snap-align: end;
+}
+
+.recommendation-scroll-button.icon-button {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  color: var(--blue);
+  font-size: 1.45rem;
+  font-weight: 900;
+  background: rgba(21, 88, 207, 0.08);
+}
+
+.toast-viewport {
+  position: fixed;
+  right: 18px;
+  bottom: calc(var(--tabbar-height, 76px) + 18px + env(safe-area-inset-bottom));
+  z-index: 1200;
+  display: grid;
+  gap: 10px;
+  width: min(360px, calc(100vw - 28px));
+  pointer-events: none;
+}
+
+.toast {
+  padding: 13px 15px;
+  border: 1px solid rgba(21, 88, 207, 0.12);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 800;
+  line-height: 1.55;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 16px 36px rgba(18, 63, 130, 0.16);
+  animation: toast-in 0.24s ease both;
+  backdrop-filter: blur(14px);
+}
+
+.toast-success {
+  border-color: rgba(22, 163, 106, 0.22);
+}
+
+.toast-error {
+  border-color: rgba(216, 59, 46, 0.22);
+  color: var(--danger);
+}
+
+.toast.is-leaving {
+  animation: toast-out 0.18s ease forwards;
+}
+
+@keyframes page-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes vote-pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (max-width: 640px) {
+  .recommendation-scroll-controls {
+    display: none;
+  }
+
+  .toast-viewport {
+    right: 10px;
+    bottom: calc(var(--tabbar-height, 76px) + 10px + env(safe-area-inset-bottom));
+    width: calc(100vw - 20px);
+  }
+
+  .toast {
+    border-radius: 14px;
+  }
+}
+
+/* Match dislike controls to like controls; keep only the color language different. */
+.dislike-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 62px;
+  border: 0;
+  border-radius: 0;
+  color: #b45309;
+  font-size: 0.92rem;
+  font-weight: 900;
+  white-space: nowrap;
+  background: transparent;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.dislike-button * {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.dislike-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+  box-shadow: none;
+}
+
+.dislike-button.is-disliked {
+  color: #d97706;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.song-card .dislike-button {
+  min-width: 50px;
+  min-height: 28px;
+  padding: 0 6px;
+  border-radius: 9px;
+  font-size: 0;
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.song-card .dislike-button:hover {
+  transform: none;
+  background: rgba(245, 158, 11, 0.14);
+}
+
+.song-card .dislike-button::before {
+  content: "踩";
+  font-size: 0.72rem;
+}
+
+.song-card .dislike-button.is-disliked::before {
+  content: "已踩";
+}
+
+.recommendation-dislike-button.dislike-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 48px;
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: 10px;
+  color: #b45309;
+  font-size: 0.72rem;
+  font-weight: 900;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.recommendation-dislike-button.dislike-button.is-disliked {
+  color: #d97706;
+  background: rgba(245, 158, 11, 0.18);
+}

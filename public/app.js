@@ -29,6 +29,8 @@ const state = {
   isSubmitting: false,
   likingSongId: "",
   dislikingSongId: "",
+  feedbackSongId: "",
+  feedbackAction: "",
   reviewingReportId: "",
   backendReady: false,
   isAdminAuthenticated: false,
@@ -102,6 +104,7 @@ const refs = {
   announcementModalContent: document.querySelector("#announcementModalContent"),
   announcementCloseBtn: document.querySelector("#announcementCloseBtn"),
   announcementAckBtn: document.querySelector("#announcementAckBtn"),
+  toastViewport: document.querySelector("#toastViewport"),
 };
 
 const supabase = hasValidSupabaseConfig()
@@ -118,6 +121,8 @@ let authListenerBound = false;
 
 setupRecommendationsPanel();
 setupReportReviewPanel();
+setupToastSystem();
+setupRecommendationScroller();
 setActivePage(getPageFromHash(window.location.hash), { updateHash: false, scroll: false });
 updateHeroPeriodLabel("正在读取征集期", "");
 bindEvents();
@@ -144,12 +149,15 @@ function bindEvents() {
   refs.searchInput.addEventListener("input", (event) => {
     state.searchTerm = event.target.value.trim();
     state.currentPage = 1;
+    refs.songsList.classList.add("is-updating");
     render();
   });
   refs.sortSelect.addEventListener("change", (event) => {
     state.sortMode = event.target.value;
     state.currentPage = 1;
+    refs.songsList.classList.add("is-updating");
     render();
+    showToast(state.sortMode === "time" ? "已按投稿时间排序。" : "已按喜欢数排序。", "info");
   });
   refs.pagination.addEventListener("click", handlePaginationClick);
   refs.pagination.addEventListener("submit", handlePaginationJump);
@@ -396,10 +404,12 @@ async function handleSongSubmit(event) {
     if (error) throw error;
     refs.form.reset();
     updateFormHint("投稿成功，愿这首歌被更多人听见。", false);
+    showToast("投稿成功，已加入本期歌单。", "success");
     await syncAllData();
   } catch (error) {
     console.error("投稿失败:", error);
     updateFormHint(`投稿失败：${resolveErrorMessage(error)}`, true);
+    showToast(`投稿失败：${resolveErrorMessage(error)}`, "error");
   } finally {
     state.isSubmitting = false;
     syncFormButton();
@@ -418,7 +428,7 @@ async function handleSongListClick(event) {
   if (!canMutateCurrentPeriod()) {
     const message = getReadOnlyMessage();
     updateFormHint(message, true);
-    if (button.closest("#recommendationsPanel")) alert(message);
+    showToast(message, "error");
     render();
     return;
   }
@@ -427,7 +437,7 @@ async function handleSongListClick(event) {
   const song = state.songs.find((item) => item.id === songId);
   if (!song) return;
   if (song.isLocked) {
-    alert("这首歌已被管理员锁定，不能继续投票。");
+    showToast("这首歌已被管理员锁定，不能继续投票。", "error");
     render();
     return;
   }
@@ -438,13 +448,15 @@ async function handleSongListClick(event) {
   try {
     if (state.likedSongIds.has(songId)) {
       await unlikeSong(songId);
+      showVoteFeedback(songId, "unlike");
     } else {
       await likeSong(songId);
+      showVoteFeedback(songId, "like");
     }
     await syncAllData();
   } catch (error) {
     console.error("点赞失败:", error);
-    alert(`操作失败：${resolveErrorMessage(error)}`);
+    showToast(`操作失败：${resolveErrorMessage(error)}`, "error");
   } finally {
     state.likingSongId = "";
     render();
@@ -456,7 +468,7 @@ async function handleDislikeClick(button) {
   if (!canMutateCurrentPeriod()) {
     const message = getReadOnlyMessage();
     updateFormHint(message, true);
-    if (button.closest("#recommendationsPanel")) alert(message);
+    showToast(message, "error");
     render();
     return;
   }
@@ -465,7 +477,7 @@ async function handleDislikeClick(button) {
   const song = state.songs.find((item) => item.id === songId);
   if (!song) return;
   if (song.isLocked) {
-    alert("这首歌已被管理员锁定，不能继续投票。");
+    showToast("这首歌已被管理员锁定，不能继续投票。", "error");
     render();
     return;
   }
@@ -480,13 +492,15 @@ async function handleDislikeClick(button) {
   try {
     if (state.dislikedSongIds.has(songId)) {
       await undislikeSong(songId);
+      showVoteFeedback(songId, "undislike");
     } else {
       await dislikeSong(songId, reason);
+      showVoteFeedback(songId, "dislike");
     }
     await syncAllData();
   } catch (error) {
     console.error("踩投票失败:", error);
-    alert(`操作失败：${resolveErrorMessage(error)}`);
+    showToast(`操作失败：${resolveErrorMessage(error)}`, "error");
   } finally {
     state.dislikingSongId = "";
     render();
@@ -617,6 +631,7 @@ function render() {
   }
 
   refs.pagination.innerHTML = createPagination(pageCount);
+  window.requestAnimationFrame(() => refs.songsList.classList.remove("is-updating"));
 }
 
 function ensureDailyRecommendations() {
@@ -665,7 +680,13 @@ function renderRecommendations() {
 
   refs.recommendationsList.innerHTML = recommendations
     .map((song, index) => createRecommendationCard(song, index + 1))
-    .join("");
+    .join("") + `
+      <div class="recommendation-scroll-controls" aria-label="每日推荐滑动控制">
+        <button class="icon-button recommendation-scroll-button" type="button" data-recommendation-scroll="prev" aria-label="上一组推荐">‹</button>
+        <button class="icon-button recommendation-scroll-button" type="button" data-recommendation-scroll="next" aria-label="下一组推荐">›</button>
+      </div>
+    `;
+  setupRecommendationScroller();
 }
 
 function setupRecommendationsPanel() {
@@ -691,6 +712,91 @@ function setupRecommendationsPanel() {
   playlistPanel.before(panel);
   refs.recommendationsPanel = panel;
   refs.recommendationsList = panel.querySelector("#recommendationsList");
+}
+
+function setupRecommendationScroller() {
+  if (!refs.recommendationsList || refs.recommendationsList.dataset.swipeReady === "true") return;
+  refs.recommendationsList.dataset.swipeReady = "true";
+
+  refs.recommendationsList.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-recommendation-scroll]");
+    if (!button) return;
+    const direction = button.dataset.recommendationScroll === "next" ? 1 : -1;
+    refs.recommendationsList.scrollBy({
+      left: direction * Math.max(180, refs.recommendationsList.clientWidth * 0.72),
+      behavior: "smooth",
+    });
+  });
+
+  let startX = 0;
+  let startScrollLeft = 0;
+  let isDragging = false;
+
+  refs.recommendationsList.addEventListener("pointerdown", (event) => {
+    if (event.target.closest("button")) return;
+    startX = event.clientX;
+    startScrollLeft = refs.recommendationsList.scrollLeft;
+    isDragging = true;
+    refs.recommendationsList.classList.add("is-dragging");
+    refs.recommendationsList.setPointerCapture?.(event.pointerId);
+  });
+
+  refs.recommendationsList.addEventListener("pointermove", (event) => {
+    if (!isDragging) return;
+    refs.recommendationsList.scrollLeft = startScrollLeft - (event.clientX - startX);
+  });
+
+  const stopDragging = () => {
+    isDragging = false;
+    refs.recommendationsList.classList.remove("is-dragging");
+  };
+  refs.recommendationsList.addEventListener("pointerup", stopDragging);
+  refs.recommendationsList.addEventListener("pointercancel", stopDragging);
+  refs.recommendationsList.addEventListener("pointerleave", stopDragging);
+}
+
+function setupToastSystem() {
+  if (refs.toastViewport) return;
+  const viewport = document.createElement("div");
+  viewport.id = "toastViewport";
+  viewport.className = "toast-viewport";
+  viewport.setAttribute("aria-live", "polite");
+  viewport.setAttribute("aria-relevant", "additions");
+  document.body.appendChild(viewport);
+  refs.toastViewport = viewport;
+}
+
+function showToast(message, tone = "info") {
+  if (!message) return;
+  setupToastSystem();
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${tone}`;
+  toast.setAttribute("role", tone === "error" ? "alert" : "status");
+  toast.textContent = message;
+  refs.toastViewport.appendChild(toast);
+
+  window.setTimeout(() => {
+    toast.classList.add("is-leaving");
+    toast.addEventListener("animationend", () => toast.remove(), { once: true });
+  }, tone === "error" ? 4200 : 2600);
+}
+
+function showVoteFeedback(songId, action) {
+  state.feedbackSongId = songId;
+  state.feedbackAction = action;
+  const messageMap = {
+    like: "喜欢成功，已点亮这首歌。",
+    unlike: "已取消喜欢。",
+    dislike: "已提交踩理由，等待管理员审查。",
+    undislike: "已取消踩。",
+  };
+  showToast(messageMap[action] || "操作成功。", action.includes("dislike") ? "info" : "success");
+  window.setTimeout(() => {
+    if (state.feedbackSongId !== songId) return;
+    state.feedbackSongId = "";
+    state.feedbackAction = "";
+    render();
+  }, 760);
 }
 
 function setupReportReviewPanel() {
@@ -894,6 +1000,9 @@ function createSongCard(song, rank) {
   const isDisliked = state.dislikedSongIds.has(song.id);
   const isBusy = state.likingSongId === song.id;
   const isDislikeBusy = state.dislikingSongId === song.id;
+  const isFeedbackTarget = state.feedbackSongId === song.id;
+  const isLikeFeedback = isFeedbackTarget && ["like", "unlike"].includes(state.feedbackAction);
+  const isDislikeFeedback = isFeedbackTarget && ["dislike", "undislike"].includes(state.feedbackAction);
   const canVote = canMutateCurrentPeriod() && !song.isLocked;
   const likeLabel = song.isLocked ? "已锁定" : isBusy ? "处理中" : isLiked ? `已喜欢 ${song.likesCount}` : `喜欢 ${song.likesCount}`;
   const dislikeLabel = song.isLocked
@@ -905,13 +1014,13 @@ function createSongCard(song, rank) {
         : `踩 ${song.dislikesCount}`;
 
   return `
-    <article class="song-card ${song.isLocked ? "is-locked" : ""}">
+    <article class="song-card ${song.isLocked ? "is-locked" : ""} ${isFeedbackTarget ? `has-${state.feedbackAction}-feedback` : ""}">
       <div class="song-index">${String(rank).padStart(2, "0")}</div>
       <div class="song-title" title="${escapeHtml(song.title)}">${escapeHtml(song.title)}</div>
       <div class="song-artist" title="${escapeHtml(song.artist)}">${escapeHtml(song.artist)}</div>
       <div class="song-like-count" title="赞 / 踩">${song.likesCount || 0} / ${song.dislikesCount || 0}</div>
       <button
-        class="like-button ${isLiked ? "is-liked" : ""}"
+        class="like-button ${isLiked ? "is-liked" : ""} ${isLikeFeedback ? "is-pulsing" : ""}"
         type="button"
         data-like-song="${song.id}"
         ${isBusy || isDislikeBusy || !canVote ? "disabled" : ""}
@@ -919,7 +1028,7 @@ function createSongCard(song, rank) {
         ${likeLabel}
       </button>
       <button
-        class="dislike-button ${isDisliked ? "is-disliked" : ""}"
+        class="dislike-button ${isDisliked ? "is-disliked" : ""} ${isDislikeFeedback ? "is-pulsing" : ""}"
         type="button"
         data-dislike-song="${song.id}"
         title="点击踩并填写理由，理由会进入管理员工作区"
@@ -954,6 +1063,9 @@ function createRecommendationCard(song, rank) {
   const isDisliked = state.dislikedSongIds.has(song.id);
   const isBusy = state.likingSongId === song.id;
   const isDislikeBusy = state.dislikingSongId === song.id;
+  const isFeedbackTarget = state.feedbackSongId === song.id;
+  const isLikeFeedback = isFeedbackTarget && ["like", "unlike"].includes(state.feedbackAction);
+  const isDislikeFeedback = isFeedbackTarget && ["dislike", "undislike"].includes(state.feedbackAction);
   const canVote = canMutateCurrentPeriod() && !song.isLocked;
   const likeLabel = song.isLocked ? "锁定" : isBusy ? "处理中" : isLiked ? "已投" : "投票";
   const dislikeLabel = song.isLocked
@@ -965,14 +1077,14 @@ function createRecommendationCard(song, rank) {
         : "踩";
 
   return `
-    <article class="recommendation-card ${song.isLocked ? "is-locked" : ""}">
+    <article class="recommendation-card ${song.isLocked ? "is-locked" : ""} ${isFeedbackTarget ? `has-${state.feedbackAction}-feedback` : ""}">
       <span class="recommendation-rank">${String(rank).padStart(2, "0")}</span>
       <div class="recommendation-main">
         <strong title="${escapeHtml(song.title)}">${escapeHtml(song.title)}</strong>
         <span title="${escapeHtml(song.artist)}">${escapeHtml(song.artist)}</span>
       </div>
       <button
-        class="recommendation-like-button like-button ${isLiked ? "is-liked" : ""}"
+        class="recommendation-like-button like-button ${isLiked ? "is-liked" : ""} ${isLikeFeedback ? "is-pulsing" : ""}"
         type="button"
         aria-pressed="${isLiked}"
         data-like-song="${song.id}"
@@ -984,7 +1096,7 @@ function createRecommendationCard(song, rank) {
         <span class="recommendation-like-text">${likeLabel}</span>
       </button>
       <button
-        class="recommendation-dislike-button dislike-button ${isDisliked ? "is-disliked" : ""}"
+        class="recommendation-dislike-button dislike-button ${isDisliked ? "is-disliked" : ""} ${isDislikeFeedback ? "is-pulsing" : ""}"
         type="button"
         aria-pressed="${isDisliked}"
         data-dislike-song="${song.id}"
@@ -1588,25 +1700,29 @@ async function handleDownloadCurrentPeriodData() {
 
   const button = refs.downloadCurrentPeriodDataBtn;
   if (button) button.disabled = true;
+  const originalText = button?.textContent || "";
+  if (button) button.textContent = "正在导出...";
   updateExportHint("正在读取当前征集期明细数据...", false);
 
   try {
     const exportData = await buildCurrentPeriodDataExport();
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json;charset=utf-8" });
+    const exportText = buildCurrentPeriodDataText(exportData);
+    const blob = new Blob([`\uFEFF${exportText}`], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `chu_xiaomai_${sanitizeFilename(exportData.period.title)}_${formatDateForFilename(new Date())}_anti_cheat.json`;
+    link.download = `chu_xiaomai_${sanitizeFilename(exportData.period.title)}_${formatDateForFilename(new Date())}_anti_cheat.txt`;
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    updateExportHint("当前征集期明细 JSON 已开始下载。", false);
+    updateExportHint("当前征集期明细 TXT 已开始下载。", false);
   } catch (error) {
     console.error("导出当前征集期数据失败:", error);
     updateExportHint(`导出失败：${resolveErrorMessage(error)}`, true);
   } finally {
     if (button) button.disabled = false;
+    if (button) button.textContent = originalText;
   }
 }
 
@@ -1799,6 +1915,150 @@ function enrichReportRow(row, songsById) {
     reviewedAt: row.reviewed_at || "",
     createdAt: row.created_at || "",
   };
+}
+
+function buildCurrentPeriodDataText(data) {
+  const lines = [
+    "长大小麦君 当前征集期数据导出",
+    `导出时间：${formatFullDateTime(data.exportedAt)}`,
+    `导出管理员：${data.exportedBy || "未知"}`,
+    "",
+    "【征集期】",
+    `ID：${data.period.id}`,
+    `标题：${data.period.title}`,
+    `状态：${data.period.status}`,
+    `时间：${data.period.rangeLabel}`,
+    "",
+    "【总览】",
+    `歌曲数：${data.totals.songs}`,
+    `点赞记录数：${data.totals.likes}`,
+    `点踩记录数：${data.totals.dislikes}`,
+    `举报记录数：${data.totals.reports}`,
+    `点赞 Cookie 数：${data.totals.uniqueLikeCookies}`,
+    `点赞 IP 数：${data.totals.uniqueLikeIps}`,
+    `点踩 Cookie 数：${data.totals.uniqueDislikeCookies}`,
+    `点踩 IP 数：${data.totals.uniqueDislikeIps}`,
+    "",
+    "【疑似异常汇总】",
+    "说明：这里只按频次快速筛查，不能直接判定作弊。请结合时间、歌曲分布、Cookie/IP 是否集中判断。",
+    "",
+    formatStatsTable("高频点赞 Cookie（>=5）", data.suspiciousSummary.highLikeCookies),
+    formatStatsTable("高频点赞 IP（>=10）", data.suspiciousSummary.highLikeIps),
+    formatStatsTable("高频点踩 Cookie（>=3）", data.suspiciousSummary.highDislikeCookies),
+    formatStatsTable("高频点踩 IP（>=8）", data.suspiciousSummary.highDislikeIps),
+    formatSongsTable(data.songs),
+    formatVoteTable("点赞明细", data.likes, "voterCookie", "voterIp"),
+    formatVoteTable("点踩明细", data.dislikes, "voterCookie", "voterIp"),
+    formatReportTable(data.reports),
+    formatStatsTable("点赞 Cookie 聚合", data.aggregates.likesByCookie),
+    formatStatsTable("点赞 IP 聚合", data.aggregates.likesByIp),
+    formatStatsTable("点踩 Cookie 聚合", data.aggregates.dislikesByCookie),
+    formatStatsTable("点踩 IP 聚合", data.aggregates.dislikesByIp),
+  ];
+
+  return lines.filter((line) => line !== null && line !== undefined).join("\n");
+}
+
+function formatStatsTable(title, rows) {
+  return [
+    `【${title}】`,
+    "标识\t总次数\t涉及歌曲数\t首次时间\t最后时间",
+    ...(rows.length
+      ? rows.map((row) => [
+          row.value,
+          row.total,
+          row.uniqueSongs,
+          formatFullDateTime(row.firstAt),
+          formatFullDateTime(row.lastAt),
+        ].map(formatCell).join("\t"))
+      : ["无"]),
+    "",
+  ].join("\n");
+}
+
+function formatSongsTable(songs) {
+  return [
+    "【歌曲列表】",
+    "序号\t歌曲ID\t歌名\t歌手\t点赞数\t点踩数\t是否锁定\t提交时间\t提交Cookie",
+    ...(songs.length
+      ? songs.map((song, index) => [
+          index + 1,
+          song.id,
+          song.title,
+          song.artist,
+          song.likesCount,
+          song.dislikesCount,
+          song.isLocked ? "是" : "否",
+          formatFullDateTime(song.createdAt),
+          song.createdBy,
+        ].map(formatCell).join("\t"))
+      : ["无"]),
+    "",
+  ].join("\n");
+}
+
+function formatVoteTable(title, rows, cookieField, ipField) {
+  return [
+    `【${title}】`,
+    "序号\t记录ID\t歌曲ID\t歌名\t歌手\tCookie\tIP\tUserID\t时间",
+    ...(rows.length
+      ? rows.map((row, index) => [
+          index + 1,
+          row.id,
+          row.songId,
+          row.songTitle,
+          row.songArtist,
+          row[cookieField],
+          row[ipField],
+          row.userId,
+          formatFullDateTime(row.createdAt),
+        ].map(formatCell).join("\t"))
+      : ["无"]),
+    "",
+  ].join("\n");
+}
+
+function formatReportTable(reports) {
+  return [
+    "【举报明细】",
+    "序号\t记录ID\t歌曲ID\t歌名\t歌手\t举报Cookie\t举报IP\t原因\t状态\t处理人\t处理时间\t举报时间",
+    ...(reports.length
+      ? reports.map((row, index) => [
+          index + 1,
+          row.id,
+          row.songId,
+          row.songTitle,
+          row.songArtist,
+          row.reporterCookie,
+          row.reporterIp,
+          row.reason,
+          row.status,
+          row.reviewedBy,
+          formatFullDateTime(row.reviewedAt),
+          formatFullDateTime(row.createdAt),
+        ].map(formatCell).join("\t"))
+      : ["无"]),
+    "",
+  ].join("\n");
+}
+
+function formatCell(value) {
+  return String(value ?? "").replace(/[\r\n\t]+/g, " ").trim();
+}
+
+function formatFullDateTime(value) {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(date);
 }
 
 function sanitizeFilename(value) {

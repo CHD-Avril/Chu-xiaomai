@@ -1,0 +1,4 @@
+# 管理员白名单：每行一个，匹配 git user.name 或 user.email
+# 匹配到任一即视为管理员，可在 main 分支直接 commit / push
+Avril
+15054777+clasum@user.noreply.gitee.com

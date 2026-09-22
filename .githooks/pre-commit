@@ -1,0 +1,36 @@
+#!/bin/sh
+# 保证 grep 等 Unix 工具可用（Git for Windows 直接调 sh 时 PATH 不含 usr/bin）
+export PATH="/usr/bin:/bin:$PATH"
+# ============================================================
+# pre-commit 钩子：禁止非管理员在 main 分支上直接 commit
+# 软约束（本地生效，可被 --no-verify 绕过）；
+# 真正的强制在 GitHub 分支保护规则（见 README.md）。
+# 管理员白名单：.githooks/admin-users.txt（按 user.name 或 user.email 匹配）
+# ============================================================
+
+BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
+if [ "$BRANCH" != "main" ]; then
+  exit 0
+fi
+
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo ".")
+ADMIN_FILE="$ROOT/.githooks/admin-users.txt"
+CURRENT_NAME="$(git config user.name)"
+CURRENT_EMAIL="$(git config user.email)"
+
+if [ -f "$ADMIN_FILE" ]; then
+  if [ -n "$CURRENT_NAME" ] && grep -qF "$CURRENT_NAME" "$ADMIN_FILE" 2>/dev/null; then
+    exit 0
+  fi
+  if [ -n "$CURRENT_EMAIL" ] && grep -qF "$CURRENT_EMAIL" "$ADMIN_FILE" 2>/dev/null; then
+    exit 0
+  fi
+fi
+
+echo ""
+echo "================================================"
+echo "  拒绝提交：main 分支受保护，仅管理员可在此提交。"
+echo "  请在功能分支（如 Avril）开发，"
+echo "  提交后通过 Pull Request 合并到 main。"
+echo "================================================"
+exit 1
