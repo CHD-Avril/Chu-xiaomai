@@ -1,0 +1,22 @@
+#!/bin/sh
+# main 分支保护：仅白名单管理员可在 main 直接 commit
+# 非管理员切到 main 提交会被拦截，请回到自己的分支开发，再通过合并引入改动。
+export PATH="/usr/bin:/bin:$PATH"
+
+BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null)
+[ "$BRANCH" = "main" ] || exit 0
+
+CURRENT_NAME=$(git config user.name)
+CURRENT_EMAIL=$(git config user.email)
+if [ -z "$CURRENT_NAME/$CURRENT_EMAIL" ]; then
+  echo "❌ 未检测到 git 用户信息（user.name / user.email），无法校验 main 分支权限。"
+  exit 1
+fi
+
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+if ! grep -Fqx "$CURRENT_NAME" "$HOOK_DIR/admin-users.txt" && ! grep -Fqx "$CURRENT_EMAIL" "$HOOK_DIR/admin-users.txt"; then
+  echo "❌ main 分支受保护：仅管理员可提交。请切换到自己的分支开发，再通过合并引入改动。"
+  exit 1
+fi
+
+exit 0

@@ -1,0 +1,29 @@
+#!/bin/sh
+# push 到 main 分支保护：仅白名单管理员可直接 push main
+# 非管理员推送 main 会被拦截，请推送自己的分支后通过 Pull Request 合并。
+export PATH="/usr/bin:/bin:$PATH"
+
+ZERO="0000000000000000000000000000000000000000"
+
+while read LOCAL_REF LOCAL_SHA REMOTE_SHA; do
+  case "$LOCAL_REF" in
+    refs/heads/main)
+      [ "$LOCAL_SHA" = "$ZERO" ] && continue # 删除远端 main 不在此钩子拦截范围
+
+      CURRENT_NAME=$(git config user.name)
+      CURRENT_EMAIL=$(git config user.email)
+      if [ -z "$CURRENT_NAME/$CURRENT_EMAIL" ]; then
+        echo "❌ 未检测到 git 用户信息（user.name / user.email），无法校验 main 分支权限。"
+        exit 1
+      fi
+
+      HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+      if ! grep -Fqx "$CURRENT_NAME" "$HOOK_DIR/admin-users.txt" && ! grep -Fqx "$CURRENT_EMAIL" "$HOOK_DIR/admin-users.txt"; then
+        echo "❌ main 分支受保护：仅管理员可 push。请推送自己的分支后再发起合并。"
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+exit 0
