@@ -1,0 +1,294 @@
+/* ========== Element Plus 品牌色定制 ========== */
+:root {
+  --el-color-primary: #1558cf;
+  --el-color-primary-light-3: #4f86ec;
+  --el-color-primary-light-5: #8fb1f2;
+  --el-color-primary-light-7: #c5d8f8;
+  --el-color-primary-light-8: #dbe7fb;
+  --el-color-primary-light-9: #eef4fd;
+  --el-color-primary-dark-2: #0f3f9e;
+  --el-color-success: #16a36a;
+  --el-color-warning: #d9a800;
+  --el-color-danger: #d83b2e;
+  --el-border-radius-base: 8px;
+  --brand-blue: #1558cf;
+  --brand-yellow: #ffcb12;
+  --brand-bg: #f6f9ff;
+  --brand-text: #0a2b57;
+  --brand-muted: #738198;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: "Manrope", "Noto Sans SC", -apple-system, "Segoe UI", sans-serif;
+  background: var(--brand-bg);
+  color: var(--brand-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ========== 登录页 ========== */
+.login-page {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background:
+    radial-gradient(circle at 85% 25%, rgba(255, 203, 18, 0.2) 0 8%, transparent 22%),
+    radial-gradient(circle at 12% 75%, rgba(79, 134, 236, 0.14) 0 10%, transparent 24%),
+    linear-gradient(180deg, #fbfdff 0%, #eef4fd 100%);
+}
+
+.login-card {
+  width: min(100%, 420px);
+  padding: 40px 36px 32px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 20px;
+  box-shadow: 0 24px 54px rgba(24, 73, 150, 0.14);
+  backdrop-filter: blur(10px);
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.login-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 30px;
+}
+
+.login-brand-mark span {
+  width: 4px;
+  border-radius: 999px;
+  background: var(--brand-blue);
+}
+
+.login-brand-mark span:nth-child(1) { height: 10px; }
+.login-brand-mark span:nth-child(2) { height: 18px; }
+.login-brand-mark span:nth-child(3) { height: 28px; }
+.login-brand-mark span:nth-child(4) { height: 18px; }
+.login-brand-mark span:nth-child(5) { height: 10px; }
+
+.login-brand strong {
+  font-size: 1.05rem;
+  font-weight: 900;
+}
+
+.login-card h1 {
+  margin: 10px 0 4px;
+  font-size: 1.55rem;
+  font-weight: 900;
+}
+
+.login-card .login-sub {
+  margin: 0 0 26px;
+  color: var(--brand-muted);
+  font-size: 0.88rem;
+}
+
+.login-error {
+  min-height: 20px;
+  margin: 12px 0 0;
+  color: var(--el-color-danger);
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+/* ========== 工作台布局 ========== */
+.admin-layout {
+  height: 100%;
+}
+
+.admin-aside {
+  background: #0d2244;
+  display: flex;
+  flex-direction: column;
+}
+
+.aside-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 20px 16px;
+  color: #fff;
+}
+
+.aside-brand .login-brand-mark span {
+  background: var(--brand-yellow);
+}
+
+.aside-brand strong {
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.aside-brand small {
+  display: block;
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+}
+
+.admin-aside .el-menu {
+  flex: 1;
+  border-right: 0;
+  background: transparent;
+}
+
+.admin-aside .el-menu-item {
+  color: rgba(255, 255, 255, 0.72);
+  margin: 2px 10px;
+  border-radius: 10px;
+}
+
+.admin-aside .el-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.admin-aside .el-menu-item.is-active {
+  background: linear-gradient(135deg, var(--brand-blue), #4f86ec);
+  color: #fff;
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  border-bottom: 1px solid rgba(18, 81, 175, 0.1);
+  backdrop-filter: blur(8px);
+  height: 60px;
+}
+
+.header-title {
+  font-size: 1.05rem;
+  font-weight: 900;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-main {
+  padding: 22px;
+  overflow-y: auto;
+  background:
+    radial-gradient(circle at 90% 10%, rgba(255, 203, 18, 0.12) 0 6%, transparent 18%),
+    linear-gradient(180deg, #fbfdff 0%, #f3f8ff 100%);
+}
+
+/* ========== 通用面板 ========== */
+.panel-card {
+  margin-bottom: 18px;
+}
+
+.panel-card .el-card__header {
+  font-weight: 800;
+  color: var(--brand-text);
+}
+
+.stat-strip {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.stat-box {
+  flex: 1 1 150px;
+  min-width: 0;
+  padding: 18px 20px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(24, 73, 150, 0.08);
+}
+
+.stat-box .stat-label {
+  color: var(--brand-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.stat-box .stat-value {
+  display: block;
+  margin-top: 8px;
+  font-size: 1.7rem;
+  font-weight: 900;
+  color: var(--brand-text);
+}
+
+.stat-box .stat-value.is-accent {
+  color: var(--brand-blue);
+}
+
+.stat-box .stat-value.is-warn {
+  color: var(--el-color-danger);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.toolbar .el-select,
+.toolbar .el-input {
+  max-width: 320px;
+}
+
+.muted {
+  color: var(--brand-muted);
+  font-size: 0.8rem;
+}
+
+/* ========== 图表容器 ========== */
+.chart-box {
+  width: 100%;
+  height: 340px;
+}
+
+@media (max-width: 768px) {
+  .admin-aside {
+    width: 64px !important;
+  }
+
+  .aside-brand strong,
+  .aside-brand small {
+    display: none;
+  }
+
+  .admin-aside .el-menu-item .el-icon + span {
+    display: none;
+  }
+
+  .admin-main {
+    padding: 14px;
+  }
+
+  .chart-box {
+    height: 260px;
+  }
+}
