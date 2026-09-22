@@ -1,0 +1,73 @@
+/* ========== 双布局差异化样式（桌面端 / 移动端） ========== */
+
+/* --- 桌面端：顶部横向导航 --- */
+.desktop-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  margin: 18px 0 6px;
+  padding: 8px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(10px);
+}
+
+.desktop-nav a {
+  display: inline-flex;
+  align-items: center;
+  padding: 9px 22px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 0.86rem;
+  color: var(--muted);
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.desktop-nav a:hover {
+  color: var(--blue);
+}
+
+.desktop-nav a.is-active {
+  background: linear-gradient(135deg, var(--blue), var(--blue-soft));
+  color: #fff;
+}
+
+/* 桌面端内容区更宽松 */
+.desktop-shell .hero {
+  padding-top: 56px;
+  padding-bottom: 44px;
+}
+
+.desktop-shell .content-grid {
+  gap: 26px;
+}
+
+/* --- 移动端：提交表单优先于告示栏（先看见能做的事） --- */
+@media (max-width: 900px) {
+  .content-grid .notice-board {
+    order: 2;
+  }
+
+  .content-grid .form-panel {
+    order: 1;
+  }
+}
+
+/* 移动端首屏与页脚紧凑 */
+@media (max-width: 560px) {
+  .mobile-shell .hero {
+    padding-top: 20px;
+    padding-bottom: 6px;
+  }
+
+  .mobile-shell .hero-text {
+    margin-bottom: 18px;
+  }
+
+  .mobile-shell .site-footer {
+    margin-top: 22px;
+  }
+}

@@ -1,10 +1,12 @@
 <script setup>
 import { computed } from "vue";
 import { usePeriodStore } from "../stores/period";
+import { useDevice } from "../composables/useDevice";
 import { formatPeriodRange } from "../utils/format";
 
 defineEmits(["go-submit"]);
 const periodStore = usePeriodStore();
+const { isMobile } = useDevice();
 const period = computed(() => periodStore.currentPeriod);
 
 const periodState = computed(() => {
@@ -32,7 +34,8 @@ const periodState = computed(() => {
       </div>
     </div>
 
-    <div class="hero-visual" aria-hidden="true">
+    <!-- 唱片装饰仅桌面端显示，移动端节省首屏空间 -->
+    <div v-if="!isMobile" class="hero-visual" aria-hidden="true">
       <div class="orbit orbit-one"></div>
       <div class="orbit orbit-two"></div>
       <div class="dot dot-blue"></div>

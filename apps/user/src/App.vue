@@ -5,9 +5,9 @@ import { usePeriodStore } from "./stores/period";
 import { useSongsStore } from "./stores/songs";
 import { useAnnouncementStore } from "./stores/announcement";
 import { hasValidConfig } from "./services/supabase";
-import AppHeader from "./components/AppHeader.vue";
-import AppNav from "./components/AppNav.vue";
-import AppFooter from "./components/AppFooter.vue";
+import { useDevice } from "./composables/useDevice";
+import MobileLayout from "./layouts/MobileLayout.vue";
+import DesktopLayout from "./layouts/DesktopLayout.vue";
 import AnnouncementModal from "./components/AnnouncementModal.vue";
 import AdminLoginModal from "./components/AdminLoginModal.vue";
 
@@ -16,6 +16,8 @@ const authStore = useAuthStore();
 const periodStore = usePeriodStore();
 const songsStore = useSongsStore();
 const announcementStore = useAnnouncementStore();
+
+const { isMobile } = useDevice();
 
 onMounted(async () => {
   authStore.initIdentity();
@@ -45,15 +47,14 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="page-shell">
-    <AppHeader @open-admin-login="authModalVisible = true" />
-    <main id="top">
-      <router-view />
-    </main>
-    <AppFooter />
-  </div>
+  <!-- 设备感知切换布局外壳：业务逻辑 / API / store 全部共享 -->
+  <component
+    :is="isMobile ? MobileLayout : DesktopLayout"
+    @open-admin-login="authModalVisible = true"
+  >
+    <router-view />
+  </component>
 
-  <AppNav />
   <AdminLoginModal v-if="authModalVisible" @close="authModalVisible = false" />
   <AnnouncementModal />
 </template>
