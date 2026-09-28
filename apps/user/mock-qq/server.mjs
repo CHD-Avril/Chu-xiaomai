@@ -73,9 +73,21 @@ function renderLoginPage(redirectUri, state) {
 }
 
 const server = http.createServer((req, res) => {
+  // CORS：本地开发放开跨域（前端 5173 → 本服务 3000）。
+  // 真实环境 token 交换由后端同域代理，无需放开。
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const path = url.pathname;
   const method = req.method;
+
+  if (method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
 
   if (method === "GET" && path === "/qq/authorize") {
     const redirectUri = url.searchParams.get("redirect_uri") ?? "";
