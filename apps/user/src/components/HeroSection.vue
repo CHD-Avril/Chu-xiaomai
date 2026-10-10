@@ -28,7 +28,7 @@ const periodState = computed(() => {
       <div class="hero-actions">
         <button class="primary-button hero-button" type="button" @click="$emit('go-submit')">♪ 我要提交歌曲</button>
         <span class="pill period-pill" :class="periodState.className">
-          <span>{{ period?.title ?? "正在读取征集期..." }}</span>
+          <span>{{ period?.title ?? periodState.label }}</span>
           <span v-if="period">{{ formatPeriodRange(period) }}</span>
         </span>
       </div>

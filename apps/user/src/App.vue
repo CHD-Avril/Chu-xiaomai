@@ -11,8 +11,10 @@ import MobileLayout from "./layouts/MobileLayout.vue";
 import DesktopLayout from "./layouts/DesktopLayout.vue";
 import AnnouncementModal from "./components/AnnouncementModal.vue";
 import AdminLoginModal from "./components/AdminLoginModal.vue";
+import StartupOverlay from "./components/StartupOverlay.vue";
 
 const authModalVisible = ref(false);
+const showStartup = ref(!sessionStorage.getItem("chu_startup_seen"));
 const authStore = useAuthStore();
 const periodStore = usePeriodStore();
 const songsStore = useSongsStore();
@@ -56,10 +58,20 @@ onMounted(async () => {
   }
 
   await announcementStore.fetchAnnouncements();
-  // 与旧版行为一致：每次加载自动弹出最新公告
+  // 只有没读过的新公告才自动弹（localStorage 记住已读 id）
   const latest = announcementStore.announcements[0];
-  if (latest) announcementStore.openModal(latest, "auto");
+  if (latest) {
+    const seenId = localStorage.getItem("chu_announcement_seen");
+    if (seenId !== String(latest.id)) {
+      announcementStore.openModal(latest, "auto");
+    }
+  }
 });
+
+function onStartupDone() {
+  sessionStorage.setItem("chu_startup_seen", "1");
+  showStartup.value = false;
+}
 </script>
 
 <template>
@@ -73,4 +85,5 @@ onMounted(async () => {
 
   <AdminLoginModal v-if="authModalVisible" @close="authModalVisible = false" />
   <AnnouncementModal />
+  <StartupOverlay v-if="showStartup" @done="onStartupDone" />
 </template>
