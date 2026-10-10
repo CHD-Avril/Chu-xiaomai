@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/Avril' }}
 
 jobs:
   build:
@@ -52,3 +52,73 @@ jobs:
         env:
           APP_BASE: ${{ matrix.base }}
         run: npm run build -- --base="$APP_BASE"
+
+      - name: Upload production build
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: build-${{ matrix.app }}
+          path: apps/${{ matrix.app }}/dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  deployment-check:
+    name: Check deployment scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Check Bash syntax
+        run: |
+          for script in scripts/*.sh; do bash -n "$script"; done
+      - name: Test publishing and rollback in a temporary directory
+        run: bash scripts/test-ecs-release.sh
+
+  deploy:
+    name: Deploy to ECS
+    needs: [build, deployment-check]
+    if: >-
+      vars.ECS_DEPLOY_ENABLED == 'true' &&
+      github.ref == 'refs/heads/Avril' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: ecs-production
+      cancel-in-progress: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Check production branch revision
+        id: revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest_sha="$(curl --fail --silent --show-error --max-time 30 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/git/ref/heads/Avril" | jq -r '.object.sha')"
+          if [[ "$latest_sha" == "$GITHUB_SHA" ]]; then
+            echo 'current=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'current=false' >> "$GITHUB_OUTPUT"
+            echo 'A newer production commit exists; skipping this deployment.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Download checked production builds
+        if: steps.revision.outputs.current == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: build-*
+          path: .artifacts
+      - name: Publish and verify both applications
+        if: steps.revision.outputs.current == 'true'
+        env:
+          ECS_HOST: ${{ secrets.ECS_HOST }}
+          ECS_USER: ${{ secrets.ECS_USER }}
+          ECS_SSH_KEY: ${{ secrets.ECS_SSH_KEY }}
+          ECS_KNOWN_HOSTS: ${{ secrets.ECS_KNOWN_HOSTS }}
+          ECS_PORT: ${{ vars.ECS_PORT || '22' }}
+        run: bash scripts/deploy-ecs.sh
