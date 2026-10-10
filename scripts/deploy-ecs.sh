@@ -19,10 +19,24 @@ release_id="$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
 work_dir="$(mktemp -d)"
 trap 'rm -rf -- "$work_dir"' EXIT
 chmod 700 "$work_dir"
-printf '%s\n' "$ECS_SSH_KEY" > "$work_dir/key"
-printf '%s\n' "$ECS_KNOWN_HOSTS" > "$work_dir/known_hosts"
+# Accept the original OpenSSH key or a single-line base64 copy from the server.
+# Clipboard contents can contain CRLF; OpenSSH expects the key's original LF lines.
+printf '%s\n' "$ECS_SSH_KEY" | tr -d '\r' > "$work_dir/key-input"
+if grep -q '^-----BEGIN OPENSSH PRIVATE KEY-----$' "$work_dir/key-input"; then
+  cp "$work_dir/key-input" "$work_dir/key"
+elif base64 --decode "$work_dir/key-input" > "$work_dir/key-decoded" 2> /dev/null; then
+  tr -d '\r' < "$work_dir/key-decoded" > "$work_dir/key"
+else
+  echo '::error::ECS_SSH_KEY must contain the complete OpenSSH private key or its base64 encoding. Copy it again from the ECS server.' >&2
+  exit 1
+fi
+printf '%s\n' "$ECS_KNOWN_HOSTS" | tr -d '\r' > "$work_dir/known_hosts"
 chmod 600 "$work_dir/key" "$work_dir/known_hosts"
-ssh-keygen -y -f "$work_dir/key" > /dev/null
+if ! ssh-keygen -y -P '' -f "$work_dir/key" > /dev/null 2>&1; then
+  echo '::error::ECS_SSH_KEY is incomplete, corrupted, or passphrase-protected. Replace it with the complete unencrypted deployment private key (or base64 encoding), not the .pub file.' >&2
+  exit 1
+fi
+echo 'SSH private key format verified.'
 known_host="$ECS_HOST"
 if [[ "$port" != 22 ]]; then known_host="[$ECS_HOST]:$port"; fi
 ssh-keygen -F "$known_host" -f "$work_dir/known_hosts" > /dev/null || {

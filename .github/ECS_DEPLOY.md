@@ -56,6 +56,14 @@ cat /root/chu-xiaomai-actions
 
 将其直接复制到 GitHub 的 `ECS_SSH_KEY` Secret。不要把私钥发到聊天、提交到仓库或填入 Variables。
 
+若网页终端复制多行内容时出现 `error in libcrypto`，可以改用单行 base64。在 ECS 上执行：
+
+```bash
+base64 -w 0 /root/chu-xiaomai-actions; printf '\n'
+```
+
+将输出的整行直接替换同一个 `ECS_SSH_KEY` Secret，流水线会自动解码。base64 内容同样属于私钥，不应发到聊天。脚本兼容 Windows 换行，并在连接服务器前验证私钥格式；只接受无口令的部署私钥。
+
 SSH 端口已确认为 22，无需额外填写。若以后更换端口，在 Variables 添加 `ECS_PORT`，并将 `ECS_KNOWN_HOSTS` 中的主机前缀改为 `[47.109.105.20]:新端口`。
 
 ## 3. 启用并执行首次发布

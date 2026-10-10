@@ -75,6 +75,8 @@ jobs:
           for script in scripts/*.sh; do bash -n "$script"; done
       - name: Test publishing and rollback in a temporary directory
         run: bash scripts/test-ecs-release.sh
+      - name: Test SSH key parsing without network access
+        run: bash scripts/test-ecs-ssh.sh
 
   deploy:
     name: Deploy to ECS
