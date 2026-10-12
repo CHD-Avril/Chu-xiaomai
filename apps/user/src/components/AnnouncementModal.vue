@@ -1,7 +1,9 @@
 <script setup>
 import { useAnnouncementStore } from "../stores/announcement";
+import { useDialog } from "../composables/useDialog";
 
 const store = useAnnouncementStore();
+const dialog = useDialog(() => store.modalOpen, handleClose);
 
 function handleClose() {
   if (store.currentAnnouncement?.id) {
@@ -15,15 +17,13 @@ function handleClose() {
   <div
     v-if="store.modalOpen && store.currentAnnouncement"
     class="modal-overlay"
-    role="dialog"
-    aria-modal="true"
     @click.self="handleClose()"
   >
-    <div class="announcement-modal">
+    <div ref="dialog" class="announcement-modal" role="dialog" aria-modal="true" aria-labelledby="announcementTitle" tabindex="-1">
       <div class="modal-header">
         <div>
-          <p class="section-tag">Notice</p>
-          <h2>公告</h2>
+          <p class="section-tag">广播台公告</p>
+          <h2 id="announcementTitle">公告</h2>
         </div>
         <button class="icon-button" type="button" aria-label="关闭公告" @click="handleClose()">&times;</button>
       </div>

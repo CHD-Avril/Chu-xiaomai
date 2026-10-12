@@ -1,4 +1,9 @@
 <script setup>
+import { ElButton, ElForm, ElFormItem, ElInput } from "element-plus";
+import "element-plus/es/components/button/style/css";
+import "element-plus/es/components/form/style/css";
+import "element-plus/es/components/form-item/style/css";
+import "element-plus/es/components/input/style/css";
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";

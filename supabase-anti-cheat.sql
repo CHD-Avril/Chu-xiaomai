@@ -6,6 +6,6 @@
 -- - vote_attempts rate limiting
 -- - safe RLS policies
 --
--- Run supabase-schema.sql instead of this file.
+-- Follow the complete migration sequence in README.md instead of this file.
 
-select 'Deprecated: anti-cheat migration is included in supabase-schema.sql.' as notice;
+select 'Deprecated: follow README.md; finish with supabase-database-integrity.sql.' as notice;

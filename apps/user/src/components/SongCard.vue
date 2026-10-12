@@ -1,20 +1,34 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { useSongsStore } from "../stores/songs";
-import { formatDateTime } from "../utils/format";
+import { usePeriodStatus } from "../composables/usePeriodStatus";
+import { useAuthStore } from "../stores/auth";
+import SongIdentity from "./SongIdentity.vue";
 
 const props = defineProps({
   song: { type: Object, required: true },
   rank: { type: Number, required: true },
+  highlighted: { type: Boolean, default: false },
+  featured: { type: Boolean, default: false },
 });
 
 const songsStore = useSongsStore();
+const { status } = usePeriodStatus();
+const auth = useAuthStore();
 const showReason = ref(false);
 const reason = ref("");
+const reasonInput = ref(null);
 
 const isLiked = computed(() => songsStore.likedSongIds.has(props.song.id));
 const isDisliked = computed(() => songsStore.dislikedSongIds.has(props.song.id));
 const canMutate = computed(() => songsStore.canMutate);
+const disabledReason = computed(() => {
+  if (props.song.isLocked) return "这首歌正在审核，暂时无法投票。";
+  if (auth.identityError) return auth.identityError;
+  if (!canMutate.value) return status.value.copy;
+  if (songsStore.likingSongId || songsStore.dislikingSongId) return "正在保存投票，请稍候。";
+  return "";
+});
 
 async function onLike() {
   await songsStore.toggleLikeSong(props.song);
@@ -26,6 +40,8 @@ async function onDislike() {
     return;
   }
   showReason.value = true;
+  await nextTick();
+  reasonInput.value?.focus();
 }
 
 async function confirmDislike() {
@@ -38,48 +54,58 @@ async function confirmDislike() {
 </script>
 
 <template>
-  <article class="song-card" :class="{ 'is-locked': song.isLocked }">
+  <article class="song-card" :class="{ 'is-locked': song.isLocked, 'is-highlighted': highlighted, 'is-top-three': featured }" :data-song-id="song.id" tabindex="-1">
     <div class="song-index">{{ String(rank).padStart(2, "0") }}</div>
     <div class="song-info">
-      <div class="song-title" :title="song.title">{{ song.title }}</div>
-      <div class="song-artist" :title="song.artist">{{ song.artist }}</div>
-      <div class="song-meta">
-        <span>{{ formatDateTime(song.createdAtMs) }}</span>
+      <SongIdentity :title="song.title" :artist="song.artist" />
+      <div v-if="song.isLocked || highlighted" class="song-meta">
         <span v-if="song.isLocked" class="lock-chip">审核锁定</span>
+        <span v-if="highlighted" class="located-chip">已定位</span>
       </div>
     </div>
     <div class="song-side">
       <div class="vote-buttons">
         <button
-          class="vote-button"
+          class="vote-button vote-like"
           :class="{ 'is-liked': isLiked }"
           type="button"
-          :disabled="!canMutate || songsStore.likingSongId === song.id"
+          :disabled="!canMutate || song.isLocked || !!songsStore.likingSongId || !!songsStore.dislikingSongId"
+          :aria-label="`${isLiked ? '取消喜欢' : '喜欢'} ${song.title}`"
+          :aria-pressed="isLiked"
+          :title="disabledReason || (isLiked ? '取消喜欢' : '喜欢这首歌')"
           @click="onLike"
         >
-          <span aria-hidden="true">♡</span>
+          <span aria-hidden="true">{{ isLiked ? '♥' : '♡' }}</span>
+          <span>{{ isLiked ? '已喜欢' : '喜欢' }}</span>
           <span>{{ song.likesCount }}</span>
         </button>
         <button
-          class="vote-button"
+          class="vote-button vote-dislike"
           :class="{ 'is-disliked': isDisliked }"
           type="button"
-          :disabled="!canMutate || songsStore.dislikingSongId === song.id"
+          :disabled="!canMutate || song.isLocked || !!songsStore.dislikingSongId || !!songsStore.likingSongId"
+          :aria-label="`${isDisliked ? '取消点踩' : '点踩'} ${song.title}`"
+          :aria-pressed="isDisliked"
+          :aria-expanded="showReason"
+          :title="disabledReason || (isDisliked ? '取消点踩' : '点踩并填写理由')"
           @click="onDislike"
         >
-          <span aria-hidden="true">♧</span>
-          <span>{{ song.dislikesCount }}</span>
+          <span>{{ isDisliked ? '已点踩' : '点踩' }}</span>
+          <span v-if="song.dislikesCount">{{ song.dislikesCount }}</span>
         </button>
       </div>
       <form v-if="showReason" class="dislike-reason" @submit.prevent="confirmDislike">
+        <p class="dislike-explanation">点踩需填写理由，供管理员审核；会取消你对这首歌的喜欢。</p>
         <input
+          ref="reasonInput"
           v-model="reason"
           type="text"
           maxlength="20"
           placeholder="点踩理由（≤20 字）"
           aria-label="点踩理由"
+          required
         />
-        <button class="primary-button compact-button" type="submit">确认</button>
+        <button class="primary-button compact-button" type="submit" :disabled="!canMutate || !!songsStore.dislikingSongId || !!songsStore.likingSongId">确认</button>
         <button class="primary-button secondary-btn compact-button" type="button" @click="showReason = false">取消</button>
       </form>
     </div>
@@ -105,17 +131,20 @@ async function confirmDislike() {
 
 .dislike-reason input {
   width: 150px;
-  height: 34px;
+  height: 44px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 4px;
   padding: 0 12px;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
+  color: var(--text);
+  background: var(--bg);
 }
+
+.dislike-reason .primary-button { min-height: 44px; }
 
 @media (max-width: 560px) {
   .song-side {
     align-items: stretch;
-    width: 100%;
   }
 
   .vote-buttons {

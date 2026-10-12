@@ -1,13 +1,27 @@
 <script setup>
+import { ElButton, ElCard, ElEmpty, ElOption, ElSelect, ElTable, ElTableColumn, ElTag } from "element-plus";
+import "element-plus/es/components/button/style/css";
+import "element-plus/es/components/card/style/css";
+import "element-plus/es/components/empty/style/css";
+import "element-plus/es/components/message/style/css";
+import "element-plus/es/components/option/style/css";
+import "element-plus/es/components/select/style/css";
+import "element-plus/es/components/table/style/css";
+import "element-plus/es/components/table-column/style/css";
+import "element-plus/es/components/tag/style/css";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
-import * as echarts from "echarts";
+import * as echarts from "echarts/core";
+import { BarChart } from "echarts/charts";
+import { GridComponent, LegendComponent, TooltipComponent } from "echarts/components";
+import { CanvasRenderer } from "echarts/renderers";
 import { useAdminStore } from "../stores/admin";
 import * as api from "../services/api";
 import { buildAntiCheatReport } from "../services/api";
 import { formatDateTime, sanitizeFilename, formatDateForFilename } from "../utils/format";
 
 const adminStore = useAdminStore();
+echarts.use([BarChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
 const chartRef = ref(null);
 let chart = null;
 
@@ -91,6 +105,7 @@ function renderChart() {
   const data = topSongs.value;
   chart.setOption(
     {
+      backgroundColor: "transparent",
       tooltip: { trigger: "axis", confine: true },
       legend: { data: ["喜欢", "点踩"], top: 0 },
       grid: { left: 44, right: 20, top: 36, bottom: 64 },
@@ -105,14 +120,14 @@ function renderChart() {
           name: "喜欢",
           type: "bar",
           data: data.map((song) => song.likes_count),
-          itemStyle: { color: "#1558cf", borderRadius: [4, 4, 0, 0] },
+          itemStyle: { color: "#1558cf", borderRadius: [2, 2, 0, 0] },
           barMaxWidth: 22,
         },
         {
           name: "点踩",
           type: "bar",
           data: data.map((song) => song.dislikes_count),
-          itemStyle: { color: "#d83b2e", borderRadius: [4, 4, 0, 0] },
+          itemStyle: { color: "#d83b2e", borderRadius: [2, 2, 0, 0] },
           barMaxWidth: 22,
         },
       ],

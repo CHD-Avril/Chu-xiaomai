@@ -14,6 +14,7 @@ export const hasValidConfig = Boolean(supabaseUrl && supabaseAnonKey);
 export const supabase = hasValidConfig
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
+        storageKey: "chu-audience-auth",
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,

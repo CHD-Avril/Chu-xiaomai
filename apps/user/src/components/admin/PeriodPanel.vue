@@ -51,8 +51,6 @@ async function handleSave() {
     if (current) {
       await api.upsertPeriod({ id: current.id, title: title.value.trim(), startsAt: startsAt.getTime(), endsAt: endsAt.getTime(), createdBy });
     } else {
-      // 与旧版一致：新建征集期前自动归档所有进行中的征集期
-      await api.archiveAllActivePeriods();
       await api.upsertPeriod({ title: title.value.trim(), startsAt: startsAt.getTime(), endsAt: endsAt.getTime(), createdBy });
     }
     await periodStore.fetchPeriods();

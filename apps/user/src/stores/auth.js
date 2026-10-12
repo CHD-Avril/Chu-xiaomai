@@ -4,14 +4,20 @@ import { getOrCreateVisitorId } from "../services/identity";
 import { isAdminEmailAllowed, isCurrentUserAdmin } from "../services/api";
 import { qqAuthBase, qqEnabled, QQ_USER_STORAGE_KEY } from "../services/qq";
 
+let testSessionRequest = 0;
+
 export const useAuthStore = defineStore("auth", {
   state: () => ({
     visitorId: "",
     backendReady: false,
     configError: false,
+    identityError: "",
     isAdmin: false,
     adminUser: null,
     qqUser: null,
+    testUser: null,
+    isTester: false,
+    testAuthBusy: false,
   }),
 
   getters: {
@@ -19,15 +25,76 @@ export const useAuthStore = defineStore("auth", {
   },
 
   actions: {
+    async syncTestSession(sessionOverride) {
+      const request = ++testSessionRequest;
+      let session = sessionOverride;
+      if (session === undefined && supabase) {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) { this.clearTestSession(); throw error; }
+        session = data.session;
+      }
+      if (request !== testSessionRequest) return false;
+      if (this.testUser?.id !== session?.user?.id) this.isTester = false;
+      this.testUser = session?.user ?? null;
+      if (!this.testUser) this.isTester = false;
+      if (!this.testUser) return false;
+      try {
+        const { data, error } = await supabase.rpc("is_current_user_tester");
+        if (error) throw error;
+        if (request === testSessionRequest) this.isTester = data === true;
+        return request === testSessionRequest && this.isTester;
+      } catch (error) {
+        if (request === testSessionRequest) this.clearTestSession();
+        throw error;
+      }
+    },
+
+    clearTestSession() {
+      testSessionRequest += 1;
+      this.testUser = null;
+      this.isTester = false;
+    },
+
+    async testLogin(email, password) {
+      if (!supabase) throw new Error("暂时无法连接登录服务。");
+      this.testAuthBusy = true;
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+        if (error) throw new Error("登录失败，请检查邮箱和密码，或联系运营人员确认账号。");
+        if (!await this.syncTestSession(data.session)) {
+          await supabase.auth.signOut({ scope: "local" });
+          this.clearTestSession();
+          throw new Error("该账号尚未获得测试权限，请联系运营人员授权。");
+        }
+      } finally {
+        this.testAuthBusy = false;
+      }
+    },
+
+    async testLogout() {
+      this.clearTestSession();
+      if (supabase) {
+        const { error } = await supabase.auth.signOut({ scope: "local" });
+        if (error) throw new Error("退出未完成，请重试。");
+      }
+    },
+
     // 初始化访客身份（Cookie），标记后端可用
     initIdentity() {
+      this.identityError = "";
+      this.visitorId = "";
+      this.backendReady = hasValidConfig;
+      this.configError = !hasValidConfig;
       if (!hasValidConfig) {
-        this.configError = true;
-        this.backendReady = false;
-        return;
+        return false;
       }
-      this.visitorId = getOrCreateVisitorId();
-      this.backendReady = true;
+      try {
+        this.visitorId = getOrCreateVisitorId();
+        return true;
+      } catch {
+        this.identityError = "浏览器暂未允许本站 Cookie，仍可浏览歌单和公告。允许本站 Cookie 后，可重新尝试开启投稿和投票。";
+        return false;
+      }
     },
 
     async syncAdminSession(sessionOverride) {
@@ -130,13 +197,15 @@ export const useAuthStore = defineStore("auth", {
         nickname: profile.nickname || "QQ 用户",
         avatar: profile.figureurl || "",
       };
-      localStorage.setItem(QQ_USER_STORAGE_KEY, JSON.stringify(this.qqUser));
+      try { localStorage.setItem(QQ_USER_STORAGE_KEY, JSON.stringify(this.qqUser)); }
+      catch { /* Keep the login in memory when browser storage is unavailable. */ }
       return true;
     },
 
     qqLogout() {
       this.qqUser = null;
-      localStorage.removeItem(QQ_USER_STORAGE_KEY);
+      try { localStorage.removeItem(QQ_USER_STORAGE_KEY); }
+      catch { /* The in-memory login has already been cleared. */ }
     },
   },
 });

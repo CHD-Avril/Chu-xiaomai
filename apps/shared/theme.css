@@ -1,0 +1,32 @@
+/* Broadcast identity, shared by the audience site and the operations desk. */
+:root {
+  color-scheme: light;
+  --bg: #f6f9ff;
+  --surface: #ffffff;
+  --surface-strong: #eef4fd;
+  --text: #0a2b57;
+  --muted: #63728a;
+  --line: #dbe4f2;
+  --accent: #1558cf;
+  --accent-hover: #1047ad;
+  --accent-dim: #eef4fd;
+  --on-accent: #ffffff;
+  --green: #168257;
+  --green-bg: #edf8f1;
+  --green-line: #b9ddc9;
+  --danger: #c43b2e;
+  --danger-bg: #fff1ef;
+  --danger-line: #f0c2bc;
+  --yellow-ink: #785a00;
+  --yellow-bg: #fff9df;
+  --yellow-line: #eedc83;
+  --mono: "Courier New", ui-monospace, monospace;
+  --sans: "Noto Sans SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  /* Compatibility aliases for existing feature components. */
+  --blue: var(--accent);
+  --blue-soft: #4f86ec;
+  --yellow: #ffcb12;
+  --yellow-soft: #ffe68a;
+  --shadow: 0 24px 54px #18499621;
+  --shadow-soft: none;
+}

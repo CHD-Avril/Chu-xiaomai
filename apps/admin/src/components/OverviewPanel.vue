@@ -1,9 +1,23 @@
 <script setup>
-import { computed } from "vue";
+import { ElAlert, ElButton, ElCard, ElDescriptions, ElDescriptionsItem, ElEmpty, ElTag } from "element-plus";
+import "element-plus/es/components/button/style/css";
+import "element-plus/es/components/alert/style/css";
+import "element-plus/es/components/card/style/css";
+import "element-plus/es/components/descriptions/style/css";
+import "element-plus/es/components/descriptions-item/style/css";
+import "element-plus/es/components/empty/style/css";
+import "element-plus/es/components/tag/style/css";
+import { computed, ref, onMounted, onBeforeUnmount } from "vue";
 import { useAdminStore } from "../stores/admin";
 import { formatPeriodRange } from "../utils/format";
 
 const adminStore = useAdminStore();
+const emit = defineEmits(["navigate"]);
+const media = window.matchMedia("(max-width: 768px)");
+const compact = ref(media.matches);
+const onMediaChange = (event) => { compact.value = event.matches; };
+onMounted(() => media.addEventListener("change", onMediaChange));
+onBeforeUnmount(() => media.removeEventListener("change", onMediaChange));
 
 const period = computed(() => adminStore.currentPeriod);
 const songCount = computed(() => adminStore.songs.length);
@@ -13,7 +27,8 @@ const reportCount = computed(() => adminStore.pendingReports.length);
 
 const periodStatus = computed(() => {
   if (!period.value) return { label: "无进行中征集期", type: "info" };
-  const now = Date.now();
+  const now = adminStore.now;
+  if (period.value.status !== "active") return { label: "已归档", type: "info" };
   if (now < period.value.startsAt) return { label: "未开始", type: "warning" };
   if (now > period.value.endsAt) return { label: "已结束", type: "danger" };
   return { label: "进行中", type: "success" };
@@ -49,7 +64,7 @@ const periodStatus = computed(() => {
 
     <el-card class="panel-card" shadow="never">
       <template #header>当前征集期详情</template>
-      <el-descriptions v-if="period" :column="3" border>
+      <el-descriptions v-if="period" :column="compact ? 1 : 3" border>
         <el-descriptions-item label="标题">{{ period.title }}</el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="periodStatus.type" size="small">{{ periodStatus.label }}</el-tag>
@@ -61,6 +76,14 @@ const periodStatus = computed(() => {
 
     <el-card class="panel-card" shadow="never">
       <template #header>待办提醒</template>
+      <div class="toolbar quick-actions">
+        <el-button type="primary" @click="emit('navigate', 'reports')">审核举报（{{ reportCount }}）</el-button>
+        <el-button @click="emit('navigate', 'periods', period ? 'edit' : 'create')">{{ period ? '调整截止时间' : '新建征集期' }}</el-button>
+        <el-button @click="emit('navigate', 'announcements')">发布公告</el-button>
+        <el-button type="warning" plain @click="emit('navigate', 'periods')">测试模式</el-button>
+        <el-button type="warning" plain @click="emit('navigate', 'export')">整理本期歌单</el-button>
+      </div>
+      <el-alert v-if="periodStatus.label === '进行中' && period.endsAt - adminStore.now <= 86400000" type="warning" :closable="false" title="本期将在 24 小时内截止，请确认公告与播出安排。" show-icon style="margin-bottom: 12px" />
       <el-alert
         v-if="reportCount > 0"
         type="warning"
@@ -83,6 +106,13 @@ const periodStatus = computed(() => {
         :closable="false"
         show-icon
         :title="`征集期「${period.title}」尚未开始，将于 ${formatPeriodRange(period)} 开放。`"
+      />
+      <el-alert
+        v-else-if="periodStatus.type === 'danger' || periodStatus.type === 'info'"
+        type="info"
+        :closable="false"
+        show-icon
+        :title="`征集期「${period.title}」已结束，投稿和投票已关闭，结果仍可查看和导出。`"
       />
       <el-alert
         v-else

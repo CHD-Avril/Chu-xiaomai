@@ -4,6 +4,9 @@ import { computed } from "vue";
 const props = defineProps({
   currentPage: { type: Number, required: true },
   pageCount: { type: Number, required: true },
+  compact: { type: Boolean, default: false },
+  disabled: { type: Boolean, default: false },
+  label: { type: String, default: "歌单分页" },
 });
 const emit = defineEmits(["change"]);
 
@@ -32,7 +35,7 @@ function getPaginationItems(pageCount, currentPage) {
 const items = computed(() => getPaginationItems(props.pageCount, props.currentPage));
 
 function goTo(page) {
-  if (page < 1 || page > props.pageCount || page === props.currentPage) return;
+  if (props.disabled || page < 1 || page > props.pageCount || page === props.currentPage) return;
   emit("change", page);
 }
 
@@ -46,8 +49,13 @@ function onJump(event) {
 </script>
 
 <template>
-  <div v-if="pageCount > 1" class="pagination">
-    <div class="pagination-pages" aria-label="分页">
+  <nav v-if="pageCount > 1" class="pagination" :class="{ 'is-compact': compact }" :aria-label="label">
+    <template v-if="compact">
+      <button class="pagination-button" type="button" aria-label="上一页" :disabled="disabled || currentPage === 1" @click="goTo(currentPage - 1)">‹</button>
+      <span class="pagination-position" aria-live="polite">{{ currentPage }} / {{ pageCount }}</span>
+      <button class="pagination-button" type="button" aria-label="下一页" :disabled="disabled || currentPage === pageCount" @click="goTo(currentPage + 1)">›</button>
+    </template>
+    <div v-else class="pagination-pages">
       <template v-for="(item, index) in items" :key="index">
         <span v-if="item === 'ellipsis'" class="pagination-ellipsis" aria-hidden="true">...</span>
         <button
@@ -55,16 +63,20 @@ function onJump(event) {
           class="pagination-button"
           :class="{ 'is-active': item === currentPage }"
           type="button"
+          :aria-current="item === currentPage ? 'page' : undefined"
+          :aria-label="`第 ${item} 页`"
+          :disabled="disabled"
           @click="goTo(item)"
         >
           {{ item }}
         </button>
       </template>
     </div>
-    <form class="pagination-jump" @submit.prevent="onJump">
-      <label class="pagination-jump-label" for="pageJumpInput">跳转到</label>
+    <details v-if="!compact && pageCount > 5" class="pagination-more">
+      <summary>跳转页码</summary>
+      <form class="pagination-jump" @submit.prevent="onJump">
+      <label class="pagination-jump-label">跳转到
       <input
-        id="pageJumpInput"
         data-page-jump-input
         type="number"
         min="1"
@@ -72,9 +84,12 @@ function onJump(event) {
         :value="currentPage"
         inputmode="numeric"
         aria-label="输入页码"
+        :disabled="disabled"
       />
+      </label>
       <span class="pagination-jump-total">/ {{ pageCount }} 页</span>
-      <button class="pagination-button pagination-jump-button" type="submit">前往</button>
-    </form>
-  </div>
+      <button class="pagination-button pagination-jump-button" type="submit" :disabled="disabled">前往</button>
+      </form>
+    </details>
+  </nav>
 </template>

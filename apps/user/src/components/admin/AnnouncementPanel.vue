@@ -77,6 +77,6 @@ async function handleDisable() {
         {{ disabling ? "处理中..." : "关闭最新公告" }}
       </button>
     </div>
-    <p class="form-hint">{{ hint || "最新公告会弹窗展示，最近三条公告会保存在首页告示栏。" }}</p>
+    <p class="form-hint">{{ hint || "最近三条公告会保存在首页告示栏，点击可查看完整内容。" }}</p>
   </form>
 </template>

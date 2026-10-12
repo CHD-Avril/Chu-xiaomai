@@ -2,8 +2,10 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
+import { useDialog } from "../composables/useDialog";
 
 const emit = defineEmits(["close"]);
+const dialog = useDialog(() => true, () => emit("close"));
 const authStore = useAuthStore();
 const router = useRouter();
 
@@ -29,7 +31,7 @@ async function handleSubmit() {
 
 <template>
   <div class="modal-overlay" @click.self="emit('close')">
-    <div class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div ref="dialog" class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" tabindex="-1">
       <div class="modal-header">
         <div>
           <p class="section-tag">Settings</p>

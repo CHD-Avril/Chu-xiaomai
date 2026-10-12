@@ -1,22 +1,28 @@
 <script setup>
 import { useAnnouncementStore } from "../stores/announcement";
 import { formatDateTime } from "../utils/format";
+import { computed, ref, watch } from "vue";
+import Pagination from "./Pagination.vue";
 
 const store = useAnnouncementStore();
+const currentPage = ref(1);
+const pageCount = computed(() => Math.max(1, Math.ceil(store.announcements.length / 2)));
+const announcements = computed(() => store.announcements.slice((currentPage.value - 1) * 2, currentPage.value * 2));
+watch(pageCount, count => { currentPage.value = Math.min(currentPage.value, count); });
 </script>
 
 <template>
-  <aside class="card notice-board">
-    <p class="section-tag">Notice Board</p>
-    <h2>告示栏</h2>
-    <p class="section-note" style="text-align: left">广播台通知会保存在这里，点击告示可查看完整内容。</p>
+  <aside id="station-notices" class="card notice-board">
+    <div class="section-head"><h2>广播台公告</h2><span class="section-note">近期消息</span></div>
     <div class="notice-board-list">
       <template v-if="store.configError">
         <div class="empty-inline">公告读取失败，请稍后刷新重试。</div>
+        <button class="text-link" type="button" @click="store.fetchAnnouncements()">重试 ↻</button>
       </template>
+      <div v-else-if="store.isLoading" class="empty-inline" role="status">正在读取广播台消息…</div>
       <template v-else-if="store.announcements.length">
         <button
-          v-for="item in store.announcements"
+          v-for="item in announcements"
           :key="item.id"
           class="notice-item"
           type="button"
@@ -28,5 +34,6 @@ const store = useAnnouncementStore();
       </template>
       <div v-else class="empty-inline">暂时还没有公告，稍后再来看看吧。</div>
     </div>
+    <Pagination v-if="!store.isLoading && !store.configError" compact label="公告翻页" :current-page="currentPage" :page-count="pageCount" @change="currentPage = $event" />
   </aside>
 </template>

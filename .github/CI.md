@@ -25,6 +25,8 @@
 
 SSH 配置回归检查使用临时生成的测试密钥和模拟传输，验证 LF、CRLF、单行 base64 的解析，以及损坏、公钥误填、有口令密钥在连接前被拒绝。
 
+`Check database workflows` 在 `apps/admin` 安装锁定依赖后运行 `npm run test:db`，使用隔离的内存 PostgreSQL 检查管理工作流、数据库完整性、测试账号权限和清空重建的事务回滚。测试不会连接或修改线上 Supabase；该检查通过后才允许自动部署。
+
 本地复现命令（在仓库根目录执行）：
 
 ```bash
@@ -32,14 +34,15 @@ npm --prefix apps/user ci
 npm --prefix apps/user run build -- --base=/
 npm --prefix apps/admin ci
 npm --prefix apps/admin run build -- --base=/admin/
+npm --prefix apps/admin run test:db
 ```
 
 ## 当前范围
 
-CI 只检查依赖安装和生产构建。项目目前没有配置 lint 和自动化业务测试，构建通过不能代替投稿、点赞、登录及数据库权限的实际验证。
+CI 检查依赖安装、生产构建、部署脚本和数据库业务权限。项目目前没有配置 lint 或浏览器端到端测试，这些检查通过不能代替线上投稿、点赞和 QQ 登录流程的实际验证，也不会自动执行线上数据库迁移。
 
 现有依赖漏洞尚待单独核查，本工作流没有将 `npm audit` 设为通过条件。
 
 检查任务无需配置服务器密钥。只有在仓库变量 `ECS_DEPLOY_ENABLED=true`、分支为 `Avril`、触发类型为 push 或手动运行，且所有检查通过时，才会执行 `Deploy to ECS`。初始化及配置见 [ECS 自动部署](ECS_DEPLOY.md)。旧 GitHub Pages 和 Firebase 工作流是独立流程。
 
-若以后需要禁止合并未通过 CI 的 PR，可在 GitHub 分支保护规则中将 `Build (user)`、`Build (admin)` 和 `Check deployment scripts` 设为必需检查；仅添加 CI 不会自动启用分支保护。
+若以后需要禁止合并未通过 CI 的 PR，可在 GitHub 分支保护规则中将 `Build (user)`、`Build (admin)`、`Check database workflows` 和 `Check deployment scripts` 设为必需检查；仅添加 CI 不会自动启用分支保护。

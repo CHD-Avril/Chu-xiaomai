@@ -1,3 +1,13 @@
+<script setup>
+import { useAuthStore } from "../stores/auth";
+import { qqEnabled } from "../services/qq";
+import { getAdminUrl } from "../services/adminEntry";
+import { usePeriodStore } from "../stores/period";
+const authStore = useAuthStore();
+const periodStore = usePeriodStore();
+const adminUrl = getAdminUrl();
+</script>
+
 <template>
   <footer class="site-footer">
     <div class="footer-inner">
@@ -14,6 +24,15 @@
       >
         黑ICP备2026012291号-1
       </a>
+    </div>
+    <div class="footer-actions">
+      <span>{{ periodStore.currentPeriod?.isTest ? '测试期仅限授权测试账号参与' : '投稿与投票无需登录' }}</span>
+      <template v-if="authStore.isQqLoggedIn">
+        <span class="qq-user">{{ authStore.qqUser.nickname }}</span>
+        <button class="text-link" type="button" @click="authStore.qqLogout()">退出 QQ 账号</button>
+      </template>
+      <button v-else-if="qqEnabled" class="text-link" type="button" title="可选账号功能，不影响投稿与投票" @click="authStore.qqLogin()">QQ 账号（可选）</button>
+      <a class="text-link" aria-label="管理员入口" :href="adminUrl">管理入口 ↗</a>
     </div>
   </footer>
 </template>

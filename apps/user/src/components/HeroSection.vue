@@ -1,52 +1,8 @@
-<script setup>
-import { computed } from "vue";
-import { usePeriodStore } from "../stores/period";
-import { useDevice } from "../composables/useDevice";
-import { formatPeriodRange } from "../utils/format";
-
-defineEmits(["go-submit"]);
-const periodStore = usePeriodStore();
-const { isMobile } = useDevice();
-const period = computed(() => periodStore.currentPeriod);
-
-const periodState = computed(() => {
-  const item = period.value;
-  if (!item) return { label: "暂无征集期", className: "is-missing" };
-  const now = Date.now();
-  if (now < item.startsAt) return { label: "征集未开始", className: "is-pending" };
-  if (now > item.endsAt) return { label: "征集已结束", className: "is-closed" };
-  return { label: "征集进行中", className: "is-active" };
-});
-</script>
-
 <template>
   <section class="hero">
-    <div class="hero-copy">
-      <p class="eyebrow">CHU Broadcast Station</p>
-      <h1><span>长大小麦君</span><strong>征集歌单</strong></h1>
-      <p class="hero-text">每一首歌，都是故事。让长大小麦君，遇见你的歌单。</p>
-      <div class="hero-actions">
-        <button class="primary-button hero-button" type="button" @click="$emit('go-submit')">♪ 我要提交歌曲</button>
-        <span class="pill period-pill" :class="periodState.className">
-          <span>{{ period?.title ?? periodState.label }}</span>
-          <span v-if="period">{{ formatPeriodRange(period) }}</span>
-        </span>
-      </div>
-    </div>
-
-    <!-- 唱片装饰仅桌面端显示，移动端节省首屏空间 -->
-    <div v-if="!isMobile" class="hero-visual" aria-hidden="true">
-      <div class="orbit orbit-one"></div>
-      <div class="orbit orbit-two"></div>
-      <div class="dot dot-blue"></div>
-      <div class="dot dot-yellow"></div>
-      <div class="record">
-        <div class="record-core"></div>
-      </div>
-      <div class="wave-bars">
-        <span></span><span></span><span></span><span></span><span></span>
-        <span></span><span></span><span></span><span></span><span></span>
-      </div>
-    </div>
+    <div class="channel-label"><span class="signal-dot"></span> 长安大学广播台 · 校园点歌</div>
+    <h1>把想听的歌，<br /><span>交给校园广播。</span></h1>
+    <p class="hero-text">一首想听的歌，一段想分享的心情。<br /><span>让它在长大的校园里，被更多人听见。</span></p>
+    <div class="broadcast-dial" aria-hidden="true"><i></i><span>CHU<br /><b>ON AIR</b></span></div>
   </section>
 </template>

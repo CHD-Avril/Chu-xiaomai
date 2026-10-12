@@ -1,29 +1,52 @@
 <script setup>
-import { ref, onMounted } from "vue";
+import { computed, watch, onMounted, onBeforeUnmount } from "vue";
+import { useRoute } from "vue-router";
 import { useAuthStore } from "./stores/auth";
 import { usePeriodStore } from "./stores/period";
 import { useSongsStore } from "./stores/songs";
 import { useAnnouncementStore } from "./stores/announcement";
-import { hasValidConfig } from "./services/supabase";
 import { qqEnabled } from "./services/qq";
-import { useDevice } from "./composables/useDevice";
-import MobileLayout from "./layouts/MobileLayout.vue";
-import DesktopLayout from "./layouts/DesktopLayout.vue";
+import AppLayout from "./layouts/AppLayout.vue";
 import AnnouncementModal from "./components/AnnouncementModal.vue";
-import AdminLoginModal from "./components/AdminLoginModal.vue";
-import StartupOverlay from "./components/StartupOverlay.vue";
+import IdentityNotice from "./components/IdentityNotice.vue";
+import TestModeAccess from "./components/TestModeAccess.vue";
+import { supabase } from "./services/supabase";
 
-const authModalVisible = ref(false);
-const showStartup = ref(!sessionStorage.getItem("chu_startup_seen"));
+const route = useRoute();
 const authStore = useAuthStore();
 const periodStore = usePeriodStore();
 const songsStore = useSongsStore();
 const announcementStore = useAnnouncementStore();
 
-const { isMobile } = useDevice();
+let clock;
+let refreshTimer;
+let ready = false;
+let disposed = false;
+let authSubscription;
+let authRefreshTimer;
+const testLocked = computed(() => periodStore.currentPeriod?.isTest && !authStore.isTester);
+function refreshVisibleData(maxAge = 15000) {
+  if (!ready || document.visibilityState !== "visible") return;
+  songsStore.refresh({ background: true, maxAge });
+  announcementStore.fetchAnnouncements({ background: true, maxAge });
+}
+const onFocus = () => refreshVisibleData();
+watch(() => route.path, (path) => {
+  if (path === "/" || path === "/playlist") refreshVisibleData(0);
+});
+onBeforeUnmount(() => {
+  disposed = true;
+  clearInterval(clock);
+  clearInterval(refreshTimer);
+  clearTimeout(authRefreshTimer);
+  authSubscription?.unsubscribe();
+  window.removeEventListener("focus", onFocus);
+  document.removeEventListener("visibilitychange", onFocus);
+});
 
 onMounted(async () => {
   authStore.initIdentity();
+  clock = setInterval(() => { periodStore.now = Date.now(); }, 1000);
 
   // QQ 授权回调处理（Mock 模式：localhost:5173/?code=...&state=...）
   const params = new URLSearchParams(location.search);
@@ -38,52 +61,44 @@ onMounted(async () => {
     }
   }
   authStore.restoreQqUser();
-
-  try {
-    await authStore.syncAdminSession();
-  } catch (error) {
-    console.warn("管理员会话同步失败:", error);
-  }
-
-  if (hasValidConfig) {
-    try {
-      await periodStore.fetchPeriods();
-      await songsStore.fetchAllData();
-    } catch (error) {
-      songsStore.errorMessage = error?.message || error?.details || "读取数据失败，请稍后刷新重试。";
-      console.error("初始化数据失败:", error);
+  try { await authStore.syncTestSession(); }
+  catch { /* Test periods remain locked if verification is unavailable. */ }
+  if (disposed) return;
+  authSubscription = supabase?.auth.onAuthStateChange((event, session) => {
+    if (event === "INITIAL_SESSION" || authStore.testAuthBusy) return;
+    // Avoid Supabase calls inside the auth callback's session lock.
+    if (!session?.user) {
+      authStore.clearTestSession();
+      if (periodStore.currentPeriod?.isTest) songsStore.resetForNoPeriod();
     }
-  } else {
-    songsStore.errorMessage = "Supabase 尚未配置，请在 .env 中填写项目地址和 anon key。";
-  }
+    clearTimeout(authRefreshTimer);
+    authRefreshTimer = setTimeout(async () => {
+      if (disposed) return;
+      try { await authStore.syncTestSession(session); }
+      catch { if (periodStore.currentPeriod?.isTest) songsStore.resetForNoPeriod(); }
+      if (periodStore.currentPeriod?.isTest) songsStore.refresh();
+    }, 0);
+  }).data.subscription;
 
-  await announcementStore.fetchAnnouncements();
-  // 只有没读过的新公告才自动弹（localStorage 记住已读 id）
-  const latest = announcementStore.announcements[0];
-  if (latest) {
-    const seenId = localStorage.getItem("chu_announcement_seen");
-    if (seenId !== String(latest.id)) {
-      announcementStore.openModal(latest, "auto");
-    }
-  }
+  // Public reading remains available even when a visitor identity cannot be stored.
+  await Promise.allSettled([
+    songsStore.refresh(),
+    announcementStore.fetchAnnouncements(),
+  ]);
+  if (disposed) return;
+  ready = true;
+  window.addEventListener("focus", onFocus);
+  document.addEventListener("visibilitychange", onFocus);
+  refreshTimer = setInterval(() => refreshVisibleData(), 60000);
 });
-
-function onStartupDone() {
-  sessionStorage.setItem("chu_startup_seen", "1");
-  showStartup.value = false;
-}
 </script>
 
 <template>
-  <!-- 设备感知切换布局外壳：业务逻辑 / API / store 全部共享 -->
-  <component
-    :is="isMobile ? MobileLayout : DesktopLayout"
-    @open-admin-login="authModalVisible = true"
-  >
-    <router-view />
-  </component>
+  <AppLayout>
+    <IdentityNotice />
+    <TestModeAccess v-if="periodStore.currentPeriod?.isTest" />
+    <router-view v-if="!testLocked || route.path === '/history'" :key="authStore.isTester ? authStore.testUser?.id : 'visitor'" />
+  </AppLayout>
 
-  <AdminLoginModal v-if="authModalVisible" @close="authModalVisible = false" />
   <AnnouncementModal />
-  <StartupOverlay v-if="showStartup" @done="onStartupDone" />
 </template>
