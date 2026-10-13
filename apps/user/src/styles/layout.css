@@ -1,7 +1,17 @@
 /* Device-specific shells use one set of visual tokens. */
-.header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.site-header { flex-wrap: wrap; }
+.header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 22px; flex-wrap: wrap; margin-left: auto; }
+.qq-account { flex-shrink: 0; }
+.qq-login-button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 44px; padding: 0 18px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); box-shadow: 0 2px 5px #0a2b5705; font-size: .8125rem; font-weight: 600; line-height: 1; white-space: nowrap; transition: border-color .18s, box-shadow .18s, transform .18s; }
+.qq-login-button img { display: block; flex-shrink: 0; width: 16px; height: 16px; }
+.qq-login-button:hover { border-color: #afc3e3; box-shadow: 0 4px 12px #0a2b570c; transform: translateY(-1px); }
+.qq-login-button:active { transform: translateY(0); box-shadow: none; }
+.qq-account-session { display: flex; align-items: center; gap: 8px; }
+.qq-nickname { overflow: hidden; text-overflow: ellipsis; }
+.qq-logout { min-height: 44px; white-space: nowrap; }
+.qq-login-hint { flex-basis: 100%; margin: 0; color: var(--muted); font-size: .8125rem; text-align: right; }
 .qq-user { display: inline-flex; align-items: center; gap: 8px; max-width: 180px; overflow: hidden; white-space: nowrap; font-size: .75rem; color: var(--text); }
-.qq-avatar { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0; overflow: hidden; background: var(--accent-dim); color: var(--accent); border: 1px solid var(--line); border-radius: 2px; }
+.qq-avatar { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0; overflow: hidden; background: var(--accent-dim); color: var(--accent); border: 1px solid var(--line); border-radius: 50%; }
 .qq-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .desktop-nav { display: flex; align-items: center; gap: 30px; margin-top: 22px; border-bottom: 1px solid var(--line); }
 .desktop-nav a { padding: 12px 0; margin-bottom: -1px; border-bottom: 2px solid transparent; color: var(--muted); font-size: .8rem; }
@@ -14,6 +24,17 @@
   .desktop-nav { display: none; }
   .site-nav { display: flex; }
   .header-actions { gap: 6px; }
+  .qq-login-button { padding-inline: 14px; }
+  .header-actions .header-note { display: none; }
   .header-actions .nav-action { padding: 8px; min-height: 40px; font-size: .75rem; }
   .qq-user { max-width: 100px; font-size: .65rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qq-login-button { transition: none; }
+  .qq-login-button:hover { transform: none; }
+}
+@media (max-width: 360px) {
+  .site-header .brand { gap: 8px; }
+  .site-header .brand-mark { width: 30px; height: 30px; }
+  .site-header .brand strong { font-size: .8125rem; letter-spacing: .02em; }
 }
