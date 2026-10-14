@@ -3,6 +3,7 @@ import { ref } from "vue";
 import { useAuthStore } from "../stores/auth";
 import { usePeriodStore } from "../stores/period";
 import { useSongsStore } from "../stores/songs";
+import ConnectionNotice from "./ConnectionNotice.vue";
 const auth = useAuthStore(), periods = usePeriodStore(), songs = useSongsStore();
 const email = ref(""), password = ref(""), busy = ref(false), hint = ref("");
 async function login() {
@@ -41,6 +42,6 @@ async function logout() {
       <p class="section-note">没有测试账号？请联系运营人员。正常征集期仍可免登录参与。</p>
     </template>
     <p v-if="hint" class="form-hint is-error" role="alert">{{ hint }}</p>
-    <button v-if="songs.errorMessage || songs.refreshError" class="text-link" type="button" :disabled="busy || songs.isRefreshing" @click="songs.refresh()">重新验证并读取 ↻</button>
+    <ConnectionNotice v-if="!auth.isTester" />
   </section>
 </template>

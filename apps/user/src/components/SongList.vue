@@ -9,6 +9,7 @@ import SongCard from "./SongCard.vue";
 import Pagination from "./Pagination.vue";
 import DailyRecommendations from "./DailyRecommendations.vue";
 import { SONGS_PER_PAGE } from "../utils/pagination";
+import ConnectionNotice from "./ConnectionNotice.vue";
 
 const songsStore = useSongsStore();
 const route = useRoute();
@@ -78,10 +79,7 @@ async function changePage(page) {
     </div>
     <DailyRecommendations v-if="!songsStore.searchTerm && !songsStore.errorMessage && !songsStore.refreshError" />
 
-    <div v-if="songsStore.errorMessage || songsStore.refreshError" class="notice" role="alert">
-      <strong>{{ songsStore.refreshError ? '更新失败，当前为上次读取的结果。' : '读取失败。' }}</strong> {{ songsStore.errorMessage || songsStore.refreshError }}
-      <button class="text-link" type="button" :disabled="songsStore.isRefreshing" @click="songsStore.refresh({ background: true })">重新读取 ↻</button>
-    </div>
+    <ConnectionNotice />
     <p v-if="songsStore.voteError" class="form-hint is-error" role="alert">{{ songsStore.voteError }}</p>
     <p v-if="hasTarget && !songsStore.isLoading && !songsStore.isRefreshing && !songsStore.errorMessage && !songsStore.refreshError" class="location-hint" role="status">
       {{ targetSong ? '已定位到你要找的歌曲，完整歌名可点击展开。' : '暂未在本期找到这首歌，请刷新榜单重试，或到往期歌单查看。' }}

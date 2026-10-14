@@ -9,8 +9,8 @@ export function usePeriodStatus() {
   const period = computed(() => periods.currentPeriod);
   const status = computed(() => {
     if (songs.isLoading) return { label: "正在读取", className: "is-pending", copy: "正在确认本期征集信息…" };
-    if (songs.errorMessage) return { label: "连接异常", className: "is-closed", copy: "暂时无法读取征集信息，请重试。" };
-    if (songs.refreshError) return { label: "更新失败", className: "is-closed", copy: "当前显示上次读取的结果，刷新成功后可继续投稿和投票。" };
+    if (songs.errorMessage) return { label: songs.connectionIssue?.label || "读取异常", className: "is-closed", copy: songs.errorMessage };
+    if (songs.refreshError) return { label: "更新失败", className: "is-closed", copy: `${songs.refreshError} 当前显示上次读取的结果。` };
     const item = period.value;
     if (!item) return { label: "暂未开放", className: "is-missing", copy: "新一期点歌征集正在准备中，欢迎稍后再来。" };
     if (periods.now < item.startsAt) return { label: "即将开始", className: "is-pending", copy: `${formatDateTime(item.startsAt)} 开放投稿` };

@@ -3,6 +3,7 @@ import { supabase, hasValidConfig } from "../services/supabase";
 import { getOrCreateVisitorId } from "../services/identity";
 import { isAdminEmailAllowed, isCurrentUserAdmin } from "../services/api";
 import { qqAuthBase, qqEnabled, QQ_USER_STORAGE_KEY } from "../services/qq";
+import { readRequest } from "../services/readRequest";
 
 let testSessionRequest = 0;
 
@@ -29,8 +30,9 @@ export const useAuthStore = defineStore("auth", {
       const request = ++testSessionRequest;
       let session = sessionOverride;
       if (session === undefined && supabase) {
-        const { data, error } = await supabase.auth.getSession();
-        if (error) { this.clearTestSession(); throw error; }
+        let data;
+        try { data = await readRequest("读取测试登录状态", () => supabase.auth.getSession()); }
+        catch (error) { if (request === testSessionRequest) this.clearTestSession(); throw error; }
         session = data.session;
       }
       if (request !== testSessionRequest) return false;
@@ -39,8 +41,7 @@ export const useAuthStore = defineStore("auth", {
       if (!this.testUser) this.isTester = false;
       if (!this.testUser) return false;
       try {
-        const { data, error } = await supabase.rpc("is_current_user_tester");
-        if (error) throw error;
+        const data = await readRequest("验证测试账号权限", (signal) => supabase.rpc("is_current_user_tester").abortSignal(signal));
         if (request === testSessionRequest) this.isTester = data === true;
         return request === testSessionRequest && this.isTester;
       } catch (error) {

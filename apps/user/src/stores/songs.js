@@ -11,6 +11,7 @@ import {
 } from "../services/api";
 import { normalizeText, resolveErrorMessage } from "../utils/format";
 import { SONGS_PER_PAGE } from "../utils/pagination";
+import { describeConnectionIssue } from "../utils/connectionIssue";
 
 const DAILY_RECOMMENDATION_LIMIT = 5;
 
@@ -49,6 +50,7 @@ export const useSongsStore = defineStore("songs", {
     recommendationPeriodId: "",
     errorMessage: "",
     refreshError: "",
+    connectionIssue: null,
     lastUpdatedAt: 0,
     lastSubmission: null,
   }),
@@ -108,7 +110,7 @@ export const useSongsStore = defineStore("songs", {
       this.isRefreshing = true;
       this.isLoading = !background || !this.lastUpdatedAt;
       try {
-        if (!useAuthStore().backendReady) throw new Error("暂时无法连接点歌台，请稍后重试。");
+        if (!useAuthStore().backendReady) throw Object.assign(new Error("点歌台配置异常"), { code: "CLIENT_CONFIG", operation: "连接点歌台" });
         await usePeriodStore().fetchPeriods();
         if (usePeriodStore().currentPeriod?.isTest) {
           await useAuthStore().syncTestSession();
@@ -121,10 +123,12 @@ export const useSongsStore = defineStore("songs", {
         this.lastUpdatedAt = Date.now();
         this.errorMessage = "";
         this.refreshError = "";
+        this.connectionIssue = null;
       } catch (error) {
         if (usePeriodStore().currentPeriod?.isTest) this.resetForNoPeriod();
-        if (this.isLoading) this.errorMessage = resolveErrorMessage(error);
-        else this.refreshError = resolveErrorMessage(error);
+        this.connectionIssue = describeConnectionIssue(error);
+        if (this.isLoading) this.errorMessage = this.connectionIssue.message;
+        else this.refreshError = this.connectionIssue.message;
       } finally {
         this.isLoading = false;
         this.isRefreshing = false;
@@ -180,6 +184,7 @@ export const useSongsStore = defineStore("songs", {
       this.recommendationDateKey = "";
       this.currentPage = 1;
       this.errorMessage = "";
+      this.connectionIssue = null;
       this.lastSubmission = null;
       this.formHint = "";
       this.formHintType = "";
@@ -261,6 +266,7 @@ export const useSongsStore = defineStore("songs", {
         try {
           await this.fetchAllData();
         } catch (error) {
+          this.connectionIssue = describeConnectionIssue(error);
           this.errorMessage = "投稿已收到，但榜单暂时无法更新，请重新读取。";
           this.formHintType = "success";
           this.formHint = "投稿已收到，榜单更新暂时失败。请到榜单刷新查看，无需重复提交。";

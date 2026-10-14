@@ -83,6 +83,14 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .form-hint { margin: 12px 0 0; color: var(--muted); font-size: .8125rem; line-height: 1.75; overflow-wrap: anywhere; }
 .form-hint.is-error { color: var(--danger); }
 .form-hint.is-success { color: var(--green); }
+.connection-notice { margin-bottom: 18px; padding: 14px; border: 1px solid var(--danger-line); border-radius: 4px; background: var(--danger-bg); font-size: .8125rem; line-height: 1.7; overflow-wrap: anywhere; }
+.connection-notice > strong { color: var(--danger); }
+.connection-notice p { margin: 6px 0; }
+.connection-notice .connection-action-note { color: var(--muted); }
+.connection-notice summary { cursor: pointer; color: var(--muted); }
+.connection-notice dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 8px 0 0; }
+.connection-notice dt { color: var(--muted); }
+.connection-notice dd { margin: 0; }
 .community-grid { display: grid; grid-template-columns: 1.45fr 1fr; gap: 24px; padding: 0 0 20px; align-items: start; }
 .notice-board-list { display: grid; gap: 0; margin-top: 18px; }
 .notice-item { display: grid; gap: 8px; padding: 16px 0; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--text); text-align: left; }

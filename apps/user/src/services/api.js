@@ -3,42 +3,40 @@
 import { supabase } from "./supabase";
 import { normalizeText } from "../utils/format";
 import { readPeriodRows } from "../../../shared/periods";
+import { readRequest } from "./readRequest";
 
 // ---------- 用户端 ----------
 
 export async function fetchPeriods() {
-  return (await readPeriodRows(supabase)).map(normalizePeriod);
+  return (await readRequest("读取征集期", async (signal) => ({ data: await readPeriodRows(supabase, { signal }) }))).map(normalizePeriod);
 }
 
 export async function fetchArchivedPeriods() {
-  return (await readPeriodRows(supabase, { archived: true })).map(normalizePeriod);
+  return (await readRequest("读取往期征集", async (signal) => ({ data: await readPeriodRows(supabase, { archived: true, signal }) }))).map(normalizePeriod);
 }
 
 export async function fetchSongs(periodId) {
-  const { data, error } = await supabase
+  const data = await readRequest("读取歌单", (signal) => supabase
     .from("songs")
     .select("id,title,artist,title_lower,artist_lower,playlist_date,likes_count,dislikes_count,is_locked,created_at")
     .eq("playlist_date", periodId)
-    .limit(500);
-  if (error) throw error;
+    .limit(500).abortSignal(signal));
   return mapSongs(data);
 }
 
 export async function fetchMyLikes(periodId, voterCookie) {
-  const { data, error } = await supabase.rpc("get_my_likes", {
+  const data = await readRequest("读取个人喜欢记录", (signal) => supabase.rpc("get_my_likes", {
     p_playlist_date: periodId,
     p_voter_cookie: voterCookie,
-  });
-  if (error) throw error;
+  }).abortSignal(signal));
   return (data ?? []).map((row) => typeof row === "string" ? row : row.song_id).filter(Boolean);
 }
 
 export async function fetchMyDislikes(periodId, voterCookie) {
-  const { data, error } = await supabase.rpc("get_my_dislikes", {
+  const data = await readRequest("读取个人点踩记录", (signal) => supabase.rpc("get_my_dislikes", {
     p_playlist_date: periodId,
     p_voter_cookie: voterCookie,
-  });
-  if (error) throw error;
+  }).abortSignal(signal));
   return (data ?? []).map((row) => typeof row === "string" ? row : row.song_id).filter(Boolean);
 }
 
@@ -84,13 +82,12 @@ function assertMutationResult(data) {
 }
 
 export async function fetchAnnouncements() {
-  const { data, error } = await supabase
+  const data = await readRequest("读取公告", (signal) => supabase
     .from("announcements")
     .select("id,title,content,is_active,created_at,updated_at")
     .eq("is_active", true)
     .order("created_at", { ascending: false })
-    .limit(20);
-  if (error) throw error;
+    .limit(20).abortSignal(signal));
   return data ?? [];
 }
 

@@ -31,6 +31,7 @@ function refreshVisibleData(maxAge = 15000) {
   announcementStore.fetchAnnouncements({ background: true, maxAge });
 }
 const onFocus = () => refreshVisibleData();
+const onOnline = () => refreshVisibleData(0);
 watch(() => route.path, (path) => {
   if (path === "/" || path === "/playlist") refreshVisibleData(0);
 });
@@ -41,6 +42,7 @@ onBeforeUnmount(() => {
   clearTimeout(authRefreshTimer);
   authSubscription?.unsubscribe();
   window.removeEventListener("focus", onFocus);
+  window.removeEventListener("online", onOnline);
   document.removeEventListener("visibilitychange", onFocus);
 });
 
@@ -61,8 +63,8 @@ onMounted(async () => {
     }
   }
   authStore.restoreQqUser();
-  try { await authStore.syncTestSession(); }
-  catch { /* Test periods remain locked if verification is unavailable. */ }
+  // Test login is verified by refresh() after reading the period. Public loading
+  // must not wait on an unrelated tester permission request.
   if (disposed) return;
   authSubscription = supabase?.auth.onAuthStateChange((event, session) => {
     if (event === "INITIAL_SESSION" || authStore.testAuthBusy) return;
@@ -88,6 +90,7 @@ onMounted(async () => {
   if (disposed) return;
   ready = true;
   window.addEventListener("focus", onFocus);
+  window.addEventListener("online", onOnline);
   document.addEventListener("visibilitychange", onFocus);
   refreshTimer = setInterval(() => refreshVisibleData(), 60000);
 });

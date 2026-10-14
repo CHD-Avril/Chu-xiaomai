@@ -4,6 +4,7 @@ import { useSongsStore } from "../stores/songs";
 import { useDraftStore } from "../stores/draft";
 import { usePeriodStatus } from "../composables/usePeriodStatus";
 import { useRouter } from "vue-router";
+import ConnectionNotice from "./ConnectionNotice.vue";
 
 const songsStore = useSongsStore();
 const { period, status: periodState } = usePeriodStatus();
@@ -45,6 +46,7 @@ function viewSubmission() {
       </div>
     </div>
 
+    <ConnectionNotice />
     <form class="song-form" @submit.prevent="handleSubmit">
       <label class="field">
         <span>歌曲标题</span>
@@ -80,7 +82,6 @@ function viewSubmission() {
       {{ songsStore.formHint || (draftStore.hasDraft ? (draftStore.storageAvailable ? "草稿已暂存在当前标签页，切换页面或刷新后可继续填写。" : "浏览器未允许保存草稿，刷新或关闭页面后可能丢失。") : "提交后会出现在榜单中，同一首歌请勿重复投稿。") }}
     </p>
     <button v-if="draftStore.hasDraft" class="text-link" type="button" :disabled="songsStore.isSubmitting" @click="draftStore.clear()">清空草稿</button>
-    <button v-if="songsStore.errorMessage || songsStore.refreshError" class="text-link" type="button" :disabled="songsStore.isRefreshing" @click="songsStore.refresh()">重新连接点歌台 ↻</button>
     <button v-if="songsStore.formHintType === 'success' && songsStore.lastSubmission" class="text-link" type="button" @click="viewSubmission">查看刚提交的歌曲 ↗</button>
     <router-link class="text-link participation-link" :to="{ name: 'home', hash: '#participationTitle' }">查看参与说明 ↓</router-link>
   </section>
