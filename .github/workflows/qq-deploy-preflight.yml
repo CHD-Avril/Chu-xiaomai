@@ -26,3 +26,11 @@ jobs:
           ECS_KNOWN_HOSTS: ${{ secrets.ECS_KNOWN_HOSTS }}
           ECS_PORT: ${{ vars.ECS_PORT || '22' }}
         run: bash scripts/deploy-ecs.sh --preflight
+      - name: Stage reviewed QQ backend installation files
+        env:
+          ECS_HOST: ${{ secrets.ECS_HOST }}
+          ECS_USER: ${{ secrets.ECS_USER }}
+          ECS_SSH_KEY: ${{ secrets.ECS_SSH_KEY }}
+          ECS_KNOWN_HOSTS: ${{ secrets.ECS_KNOWN_HOSTS }}
+          ECS_PORT: ${{ vars.ECS_PORT || '22' }}
+        run: bash scripts/deploy-ecs.sh --stage-qq

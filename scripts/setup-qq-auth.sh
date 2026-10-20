@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# One-time production setup. Does not edit any existing Nginx server block.
+# One-time production setup, including a tested, backed-up Nginx proxy include.
 [[ "$EUID" -eq 0 ]] || { echo 'Run as root on ECS after approval.' >&2; exit 1; }
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 web_root=/var/www/chu-xiaomai
@@ -16,8 +16,18 @@ id chu-deploy > /dev/null
 install -d -m 700 /etc/chu-xiaomai
 if [[ ! -f /etc/chu-xiaomai/qq-auth.env ]]; then
   install -m 600 "$repo_root/deploy/qq-auth/qq-auth.env.example" /etc/chu-xiaomai/qq-auth.env
-  echo 'Fill QQ_APP_KEY in /etc/chu-xiaomai/qq-auth.env, then rerun this script. Do not send the key in chat.'
-  exit 1
+fi
+if ! /usr/bin/node -e 'const env=require("node:util").parseEnv(require("node:fs").readFileSync("/etc/chu-xiaomai/qq-auth.env","utf8"));process.exit(env.QQ_APP_KEY?.trim()?0:1);'; then
+  if [[ -t 0 ]]; then
+    read -r -s -p 'Paste your existing QQ AppKey here (input is hidden), then press Enter: ' qq_app_key
+    echo
+    [[ "$qq_app_key" =~ ^[A-Za-z0-9]+$ ]] || { echo 'Invalid or empty AppKey; no key was saved.' >&2; exit 1; }
+    printf '%s' "$qq_app_key" | /usr/bin/node -e 'const fs=require("node:fs"); let key=""; process.stdin.on("data", chunk => key+=chunk); process.stdin.on("end",()=>{const file="/etc/chu-xiaomai/qq-auth.env";fs.writeFileSync(file,fs.readFileSync(file,"utf8").replace(/^QQ_APP_KEY=.*$/m,"QQ_APP_KEY="+key),{mode:0o600});});'
+    unset qq_app_key
+  else
+    echo 'Fill QQ_APP_KEY in /etc/chu-xiaomai/qq-auth.env, then rerun this script. Do not send the key in chat.'
+    exit 1
+  fi
 fi
 chown root:root /etc/chu-xiaomai/qq-auth.env
 chmod 600 /etc/chu-xiaomai/qq-auth.env
@@ -56,7 +66,6 @@ systemctl daemon-reload
 systemctl enable chu-qq-auth.service
 systemctl restart chu-qq-auth.service
 systemctl is-active --quiet chu-qq-auth.service
-echo 'Backend installed. Add this line inside the EXISTING HTTPS server block for chuxiaomai.cyou:'
-echo '    include /etc/nginx/snippets/chu-qq-auth.conf;'
-echo 'Then run: nginx -t && systemctl reload nginx'
-echo 'Finally run: node scripts/check-qq-login.mjs https://chuxiaomai.cyou'
+/usr/bin/node "$repo_root/scripts/install-qq-nginx.mjs"
+/usr/bin/node "$repo_root/scripts/check-qq-login.mjs" https://chuxiaomai.cyou
+echo 'QQ backend initialization complete; the checked frontend/backend release can now be published.'

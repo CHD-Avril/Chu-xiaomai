@@ -64,6 +64,17 @@ REMOTE
   exit 0
 fi
 
+if [[ "${1:-}" == '--stage-qq' ]]; then
+  setup_name="qq-setup-$GITHUB_SHA"
+  setup_archive="$work_dir/$setup_name.tar.gz"
+  tar -czf "$setup_archive" apps/user/qq-auth/index.mjs apps/user/qq-auth/server.mjs deploy/qq-auth/chu-qq-auth.service deploy/qq-auth/nginx.conf deploy/qq-auth/qq-auth.env.example scripts/setup-qq-auth.sh scripts/install-qq-nginx.mjs scripts/check-qq-login.mjs
+  stage_ssh=(-i "$work_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work_dir/known_hosts" -o ConnectTimeout=15)
+  scp "${stage_ssh[@]}" -P "$port" "$setup_archive" "$ECS_USER@$ECS_HOST:/var/www/chu-xiaomai/incoming/"
+  ssh "${stage_ssh[@]}" -p "$port" "$ECS_USER@$ECS_HOST" "mkdir -p /var/www/chu-xiaomai/incoming/$setup_name && tar -xzf /var/www/chu-xiaomai/incoming/$setup_name.tar.gz -C /var/www/chu-xiaomai/incoming/$setup_name --no-same-owner --no-same-permissions"
+  echo "QQ setup sources staged. Root command: bash /var/www/chu-xiaomai/incoming/$setup_name/scripts/setup-qq-auth.sh"
+  exit 0
+fi
+
 mkdir -p "$work_dir/payload/user" "$work_dir/payload/admin" "$work_dir/payload/qq-auth"
 # Explicit allowlist: never package .env.local, certificates, browser profiles or logs.
 for source in index.mjs server.mjs; do

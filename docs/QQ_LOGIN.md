@@ -24,10 +24,10 @@ Windows 下运行仓库根目录的 `dev-up.ps1`。脚本启动本地 Vite、QQ 
 
 前提：已有 ECS 静态站部署目录 `/var/www/chu-xiaomai/current`、`chu-deploy` 部署账号、`/usr/bin/node` 22 或更新版本、systemd、sudo 和已配置 HTTPS 的 Nginx。本次代码修复不会自动运行以下命令，也不会上传本机密钥。
 
-1. 将代码更新到服务器的源码目录，以 root 执行 `bash scripts/setup-qq-auth.sh`。首次运行只创建 `/etc/chu-xiaomai/qq-auth.env` 模板，提示填密钥后停止。
-2. 在服务器本地编辑该文件，填写 QQ_APP_KEY 并核对 AppID、域名、回调，然后重新运行安装脚本。文件保持 root:root、600，位于 Web 根目录之外，不放入发布包、聊天或 Git。安装脚本不打印密钥。
+1. 将代码更新到服务器的源码目录，或通过 `QQ deployment preflight` 工作流把安装文件暂存到服务器，以 root 执行对应目录的 `scripts/setup-qq-auth.sh`。
+2. 首次在交互终端运行时，会提示粘贴已有 AppKey，输入不会显示；也可预先在服务器填写 `/etc/chu-xiaomai/qq-auth.env`。核对 AppID、域名、回调，文件保持 root:root、600，位于 Web 根目录之外，不放入发布包、聊天或 Git。安装脚本不打印密钥。
 3. 脚本安装只监听 `127.0.0.1:3000` 的 `chu-qq-auth.service`，以独立的 `chu-qq-auth` 用户运行。它会给现有静态版本补装一个后端用于首次发布失败后的回滚，并为 `chu-deploy` 仅允许通过 sudo 重启这个单一服务。
-4. 在现有 `chuxiaomai.cyou` 的 HTTPS `server {}` 内添加一行 `include /etc/nginx/snippets/chu-qq-auth.conf;`。保留原来的证书、用户端和 `/admin/` 路由。执行 `nginx -t` 成功后再执行 `systemctl reload nginx`。
+4. 脚本会识别现有 `chuxiaomai.cyou` 的 HTTPS `server {}`，先备份到 `/etc/chu-xiaomai/`，再添加一行 `include /etc/nginx/snippets/chu-qq-auth.conf;`。保留原来的证书、用户端和 `/admin/` 路由，只有 `nginx -t` 通过后才重载；失败恢复原配置。匹配到多个站点或已有其他 `/qq/` 路由时会停止，交由人工确认。
 5. 完成上述初始化后，使用现有 ECS 发布流程同时发布前端与授权后端。发布包只包含后端 `index.mjs`、`server.mjs` 和版本文件，不包含本地配置、开发证书、浏览器资料或日志。
 
 生产启动会拒绝模拟模式、缺少凭据或 HTTP 回调。生产服务不读取仓库中的 `.env.local`。会话及未完成授权存在进程内存，服务重启后需要重新登录。
