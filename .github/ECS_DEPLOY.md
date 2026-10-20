@@ -2,7 +2,9 @@
 
 生产分支为 `Avril`。用户端地址为 `https://chuxiaomai.cyou/`，管理端地址为 `https://chuxiaomai.cyou/admin/`。
 
-流程：GitHub 上检查两个应用 → 上传构建产物 → 用专用 SSH 账号传到 ECS → 切换版本 → 检查两个页面和版本号。任何检查失败都不会开始发布；发布后的健康检查失败会自动切回上一版本。若等待发布期间 `Avril` 已有新提交，旧运行会跳过发布。
+流程：GitHub 上检查两个应用及 QQ 授权后端 → 上传静态构建和后端源码 → 用专用 SSH 账号传到 ECS → 切换版本并重启 QQ 服务 → 检查两个页面、授权后端和版本号。任何检查失败都不会开始发布；发布后的健康检查失败会恢复上一版前后端。若等待发布期间 `Avril` 已有新提交，旧运行会跳过发布。
+
+**QQ 登录升级前置步骤：** 原来的部署仅包含静态站，必须先按 [QQ 登录接入](../docs/QQ_LOGIN.md) 安装 `chu-qq-auth.service`、服务端密钥配置和 Nginx `/qq/` 代理，再执行新版流水线。没有初始化授权服务时，新发布会在切换前停止。以下原有 SSH 初始化只负责静态目录和上传权限；QQ 安装另行只授予部署账号重启 `chu-qq-auth.service` 的 sudo 权限。
 
 ## 1. 在 ECS 终端初始化（仅首次需要）
 
@@ -95,7 +97,7 @@ SSH 端口已确认为 22，无需额外填写。若以后更换端口，在 Var
 
 发布版本号由提交 SHA、Actions run ID 和重试次数组成。两端通过同一个 `current` 链接切换，不需要重启 Nginx；服务器不再运行 npm 构建。
 
-健康检查在服务器上经本地 Nginx 验证 HTTPS 首页、管理端页面及两端的 `REVISION` 文件，确保返回的是本次提交。页面可访问不代表数据库业务测试通过，Supabase 仍是独立服务。
+健康检查在服务器上经本地 Nginx 验证 HTTPS 首页、管理端页面、两端的 `REVISION`，以及 `/qq/health` 的真实模式、配置和本次版本。后端跟随同一个 `current` 版本链接，发布和回滚均需重启该服务。页面或健康检查可访问不代表真实 QQ 扫码及数据库业务已通过，Supabase 仍是独立服务。
 
 从浏览器访问 `/REVISION` 和 `/admin/REVISION`，应看到本次提交的完整 SHA。服务器源码目录不会随自动发布更新，线上文件位于 `releases`。
 
@@ -112,5 +114,6 @@ cd /var/www/chu-xiaomai &&
 test -s 'releases/上一版本目录名/user/index.html' &&
 test -s 'releases/上一版本目录名/admin/index.html' &&
 ln -s 'releases/上一版本目录名' .current-manual &&
-mv -Tf .current-manual current
+mv -Tf .current-manual current &&
+systemctl restart chu-qq-auth.service
 ```

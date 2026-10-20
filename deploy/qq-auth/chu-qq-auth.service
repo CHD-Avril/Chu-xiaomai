@@ -1,0 +1,23 @@
+[Unit]
+Description=CHU QQ OAuth authorization backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=chu-qq-auth
+Group=chu-qq-auth
+EnvironmentFile=/etc/chu-xiaomai/qq-auth.env
+WorkingDirectory=/var/www/chu-xiaomai/current/qq-auth
+ExecStart=/usr/bin/node /var/www/chu-xiaomai/current/qq-auth/index.mjs
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=40
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

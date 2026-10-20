@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
+import { createServer as createHttpServer } from "node:http";
 import { createServer } from "vite";
 import { createPinia, setActivePinia } from "pinia";
 
@@ -25,7 +26,7 @@ test("real API/store flow reports the failing read, recovers, preserves stale da
   };
   let server;
   try {
-    server = await createServer({ root: fileURLToPath(new URL("..", import.meta.url)), mode: "test", server: { middlewareMode: true }, appType: "custom" });
+    server = await createServer({ root: fileURLToPath(new URL("..", import.meta.url)), mode: "test", server: { middlewareMode: true, hmr: { server: createHttpServer() } }, appType: "custom" });
     const { useSongsStore } = await server.ssrLoadModule("/src/stores/songs.js");
     const { useAuthStore } = await server.ssrLoadModule("/src/stores/auth.js");
     const { useDraftStore } = await server.ssrLoadModule("/src/stores/draft.js");

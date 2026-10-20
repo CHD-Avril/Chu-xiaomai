@@ -1,7 +1,9 @@
 /* Device-specific shells use one set of visual tokens. */
 .site-header { flex-wrap: wrap; }
 .header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 22px; flex-wrap: wrap; margin-left: auto; }
-.qq-account { flex-shrink: 0; }
+.qq-account { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+.qq-mock-label { font-size: .6875rem; color: var(--muted); }
+.qq-login-button:disabled, .qq-logout:disabled { opacity: .65; cursor: wait; }
 .qq-login-button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 44px; padding: 0 18px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); box-shadow: 0 2px 5px #0a2b5705; font-size: .8125rem; font-weight: 600; line-height: 1; white-space: nowrap; transition: border-color .18s, box-shadow .18s, transform .18s; }
 .qq-login-button img { display: block; flex-shrink: 0; width: 16px; height: 16px; }
 .qq-login-button:hover { border-color: #afc3e3; box-shadow: 0 4px 12px #0a2b570c; transform: translateY(-1px); }

@@ -2,10 +2,15 @@
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-fixture="$(mktemp -d)"
+temp_root="$(cd -- "${TMPDIR:-/tmp}" && pwd -P)"
+fixture="$(mktemp -d "$temp_root/chu-ssh-test.XXXXXX")"
+[[ "$(dirname -- "$fixture")" == "$temp_root" && -d "$fixture" ]] || exit 1
 trap 'rm -rf -- "$fixture"' EXIT
 mkdir -p "$fixture/bin" "$fixture/scripts" "$fixture/.artifacts/build-user" "$fixture/.artifacts/build-admin"
 cp "$script_dir/ecs-release.sh" "$fixture/scripts/"
+mkdir -p "$fixture/apps/user/qq-auth"
+for source in index.mjs server.mjs; do cp "$script_dir/../apps/user/qq-auth/$source" "$fixture/apps/user/qq-auth/$source"; done
+echo 'QQ_APP_KEY=must-not-ship' > "$fixture/apps/user/qq-auth/.env.local"
 for app in user admin; do printf 'fixture\n' > "$fixture/.artifacts/build-$app/index.html"; done
 ssh-keygen -q -t ed25519 -N '' -f "$fixture/source-key"
 ssh-keygen -q -t ed25519 -N 'test-only-passphrase' -f "$fixture/encrypted-key"
@@ -17,6 +22,21 @@ set -euo pipefail
 printf 'called\n' >> "$SSH_TEST_CALLS"
 MOCK
 cp "$fixture/bin/ssh" "$fixture/bin/scp"
+cat > "$fixture/bin/scp" <<'MOCK'
+#!/usr/bin/env bash
+set -euo pipefail
+echo 'called' >> "$SSH_TEST_CALLS"
+for file in "$@"; do
+  if [[ "$file" == *.tar.gz ]]; then
+    listing="$(tar -tzf "$file")"
+    [[ "$listing" == *qq-auth/server.mjs* ]]
+    [[ "$listing" == *qq-auth/index.mjs* ]]
+    if [[ "$listing" == *'.env'* || "$listing" == *'.local'* ]]; then
+      echo 'Backend credentials or local assets leaked into release' >&2; exit 1
+    fi
+  fi
+done
+MOCK
 chmod +x "$fixture/bin/ssh" "$fixture/bin/scp"
 export PATH="$fixture/bin:$PATH"
 export SSH_TEST_CALLS="$fixture/calls"

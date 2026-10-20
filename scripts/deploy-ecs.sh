@@ -16,7 +16,9 @@ if (( 10#$port < 1 || 10#$port > 65535 )); then echo 'Invalid ECS_PORT' >&2; exi
 release_id="$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
 [[ "$release_id" =~ ^[0-9a-f]{40}-[0-9]+-[0-9]+$ ]] || { echo 'Invalid release ID' >&2; exit 1; }
 
-work_dir="$(mktemp -d)"
+temp_root="$(cd -- "${TMPDIR:-/tmp}" && pwd -P)"
+work_dir="$(mktemp -d "$temp_root/chu-deploy.XXXXXX")"
+[[ "$(dirname -- "$work_dir")" == "$temp_root" && -d "$work_dir" ]] || exit 1
 trap 'rm -rf -- "$work_dir"' EXIT
 chmod 700 "$work_dir"
 # Accept the original OpenSSH key or a single-line base64 copy from the server.
@@ -44,13 +46,36 @@ ssh-keygen -F "$known_host" -f "$work_dir/known_hosts" > /dev/null || {
   exit 1
 }
 
-mkdir -p "$work_dir/payload/user" "$work_dir/payload/admin"
+if [[ "${1:-}" == '--preflight' ]]; then
+  ssh -i "$work_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work_dir/known_hosts" -o ConnectTimeout=15 -p "$port" "$ECS_USER@$ECS_HOST" 'sh -s' <<'REMOTE'
+set -eu
+if [ "$(id -u)" = 0 ]; then
+  echo 'QQ_SETUP_ACCESS=root'
+elif sudo -n true 2>/dev/null; then
+  echo 'QQ_SETUP_ACCESS=sudo-root'
+else
+  echo 'QQ_SETUP_ACCESS=limited-deploy'
+fi
+printf 'NODE_VERSION='; node --version
+printf 'QQ_SERVICE='; systemctl is-active chu-qq-auth.service || true
+if [ -s /var/www/chu-xiaomai/current/qq-auth/index.mjs ]; then echo 'QQ_BACKEND_INSTALLED=true'; else echo 'QQ_BACKEND_INSTALLED=false'; fi
+if grep -Rql 'include /etc/nginx/snippets/chu-qq-auth.conf' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null; then echo 'QQ_NGINX_INSTALLED=true'; else echo 'QQ_NGINX_INSTALLED=false'; fi
+REMOTE
+  exit 0
+fi
+
+mkdir -p "$work_dir/payload/user" "$work_dir/payload/admin" "$work_dir/payload/qq-auth"
+# Explicit allowlist: never package .env.local, certificates, browser profiles or logs.
+for source in index.mjs server.mjs; do
+  test -s "apps/user/qq-auth/$source"
+  cp "apps/user/qq-auth/$source" "$work_dir/payload/qq-auth/$source"
+done
 for app in user admin; do
   test -s ".artifacts/build-$app/index.html"
   cp -a ".artifacts/build-$app/." "$work_dir/payload/$app/"
 done
 printf '%s\n' "$GITHUB_SHA" > "$work_dir/payload/REVISION"
-tar -czf "$work_dir/$release_id.tar.gz" -C "$work_dir/payload" user admin REVISION
+tar -czf "$work_dir/$release_id.tar.gz" -C "$work_dir/payload" user admin qq-auth REVISION
 cp scripts/ecs-release.sh "$work_dir/$release_id.sh"
 
 ssh_options=(

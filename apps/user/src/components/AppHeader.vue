@@ -1,20 +1,19 @@
 <script setup>
-import { ref } from "vue";
+import { computed } from "vue";
+import { useRoute } from "vue-router";
 import { useAuthStore } from "../stores/auth";
-import { qqEnabled } from "../services/qq";
+import { getQqAuthorizeUrl, qqEnabled } from "../services/qq";
 import qqLoginIcon from "../assets/qq-login-icon.png";
 
 const authStore = useAuthStore();
-const loginHint = ref("");
-
-function login() {
-  if (!qqEnabled) {
-    loginHint.value = "QQ 登录暂未开放，请稍后再试。";
-    return;
-  }
-  loginHint.value = "";
-  authStore.qqLogin();
-}
+const isLocalPreview = import.meta.env.DEV;
+const route = useRoute();
+const qqLoginHref = computed(() => {
+  const returnTo = new URL(location.href);
+  returnTo.hash = route.fullPath;
+  try { return getQqAuthorizeUrl(returnTo.href, window.matchMedia("(max-width: 767px)").matches); }
+  catch { return ""; }
+});
 </script>
 
 <template>
@@ -32,6 +31,8 @@ function login() {
     <div class="header-actions">
       <span class="header-note">校园点歌 · 为喜欢发声</span>
       <div class="qq-account">
+        <span v-if="authStore.qqMode === 'mock'" class="qq-mock-label">本地模拟</span>
+        <span v-else-if="isLocalPreview" class="qq-mock-label">本地预览</span>
         <div v-if="authStore.isQqLoggedIn" class="qq-account-session">
           <span class="qq-user" :title="authStore.qqUser.nickname">
             <span class="qq-avatar" aria-hidden="true">
@@ -40,14 +41,18 @@ function login() {
             </span>
             <span class="qq-nickname">{{ authStore.qqUser.nickname }}</span>
           </span>
-          <button class="text-link qq-logout" type="button" @click="authStore.qqLogout()">退出</button>
+          <button class="text-link qq-logout" type="button" :disabled="authStore.qqBusy" @click="authStore.qqLogout()">{{ authStore.qqBusy ? '退出中…' : '退出' }}</button>
         </div>
-        <button v-else class="qq-login-button" type="button" aria-label="QQ 登录" @click="login">
+        <a v-else-if="qqEnabled && qqLoginHref" class="qq-login-button" :href="qqLoginHref" aria-label="QQ 登录">
+          <img :src="qqLoginIcon" width="16" height="16" alt="" aria-hidden="true" />
+          <span>QQ 登录</span>
+        </a>
+        <button v-else class="qq-login-button" type="button" aria-label="QQ 登录" @click="authStore.qqLogin()">
           <img :src="qqLoginIcon" width="16" height="16" alt="" aria-hidden="true" />
           <span>QQ 登录</span>
         </button>
       </div>
     </div>
-    <p v-if="loginHint" class="qq-login-hint" role="status">{{ loginHint }}</p>
+    <p v-if="authStore.qqError" class="qq-login-hint" role="status">{{ authStore.qqError }}</p>
   </header>
 </template>

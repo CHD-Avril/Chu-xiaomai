@@ -5,7 +5,6 @@ import { useAuthStore } from "./stores/auth";
 import { usePeriodStore } from "./stores/period";
 import { useSongsStore } from "./stores/songs";
 import { useAnnouncementStore } from "./stores/announcement";
-import { qqEnabled } from "./services/qq";
 import AppLayout from "./layouts/AppLayout.vue";
 import AnnouncementModal from "./components/AnnouncementModal.vue";
 import IdentityNotice from "./components/IdentityNotice.vue";
@@ -30,7 +29,10 @@ function refreshVisibleData(maxAge = 15000) {
   songsStore.refresh({ background: true, maxAge });
   announcementStore.fetchAnnouncements({ background: true, maxAge });
 }
-const onFocus = () => refreshVisibleData();
+const onFocus = () => {
+  refreshVisibleData();
+  if (document.visibilityState === "visible") authStore.restoreQqUser();
+};
 const onOnline = () => refreshVisibleData(0);
 watch(() => route.path, (path) => {
   if (path === "/" || path === "/playlist") refreshVisibleData(0);
@@ -50,18 +52,8 @@ onMounted(async () => {
   authStore.initIdentity();
   clock = setInterval(() => { periodStore.now = Date.now(); }, 1000);
 
-  // QQ 授权回调处理（Mock 模式：localhost:5173/?code=...&state=...）
-  const params = new URLSearchParams(location.search);
-  const qqCode = params.get("code");
-  if (qqCode && qqEnabled) {
-    try {
-      await authStore.handleQqCallback(qqCode);
-    } catch (error) {
-      console.warn("QQ 登录失败:", error);
-    } finally {
-      history.replaceState(null, "", location.pathname + location.hash);
-    }
-  }
+  // OAuth codes are consumed by the backend; only a verified session reaches Vue.
+  authStore.readQqCallbackError();
   authStore.restoreQqUser();
   // Test login is verified by refresh() after reading the period. Public loading
   // must not wait on an unrelated tester permission request.
