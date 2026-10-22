@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "node --test tests/moderation-export.cjs",
     "test:db": "node tests/database-workflow.cjs && node tests/database-integrity.cjs && node tests/database-test-mode.cjs && node tests/database-reset.cjs"
   },
   "dependencies": {

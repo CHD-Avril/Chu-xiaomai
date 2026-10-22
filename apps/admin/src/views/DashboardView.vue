@@ -39,6 +39,7 @@ const viewComponents = {
   periods: defineAsyncComponent(() => import("../components/PeriodManage.vue")),
   announcements: defineAsyncComponent(() => import("../components/AnnouncementManage.vue")),
   anticheat: defineAsyncComponent(() => import("../components/AntiCheatPanel.vue")),
+  automod: defineAsyncComponent(() => import("../components/AutoModerationPanel.vue")),
   export: defineAsyncComponent(() => import("../components/ExportPanel.vue")),
 };
 
@@ -49,6 +50,7 @@ const viewTitles = {
   periods: "征集期管理",
   announcements: "公告管理",
   anticheat: "防作弊明细",
+  automod: "自动审核",
   export: "播出歌单与导出",
 };
 
@@ -92,6 +94,7 @@ onBeforeUnmount(() => clearInterval(clock));
         <el-menu-item index="periods">征集期</el-menu-item>
         <el-menu-item index="announcements">公告</el-menu-item>
         <el-menu-item index="anticheat">防作弊明细</el-menu-item>
+        <el-menu-item index="automod">自动审核</el-menu-item>
         <el-menu-item index="export">播出歌单与导出</el-menu-item>
       </el-menu>
     </el-aside>
