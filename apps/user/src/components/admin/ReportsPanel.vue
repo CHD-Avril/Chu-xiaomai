@@ -6,6 +6,7 @@ import { formatDateTime } from "../../utils/format";
 const reports = ref([]);
 const hint = ref("");
 const processingId = ref("");
+const reviewReasons = ref({});
 
 async function loadReports() {
   try {
@@ -17,10 +18,15 @@ async function loadReports() {
 }
 
 async function review(report, approve) {
+  const reason = (reviewReasons.value[report.id] || "").trim();
+  if (!reason || reason.length > 500) {
+    hint.value = "请填写 1–500 字的审核原因。";
+    return;
+  }
   processingId.value = report.id;
   hint.value = "";
   try {
-    await api.reviewReport(report.id, approve);
+    await api.reviewReport(report.id, approve, reason);
     reports.value = reports.value.filter((item) => item.id !== report.id);
     hint.value = approve ? "已同意举报，歌曲已锁定。" : "已驳回举报。";
   } catch (error) {
@@ -47,6 +53,7 @@ onMounted(loadReports);
             <span style="color: var(--muted); font-weight: 400"> - {{ report.song?.artist ?? "" }}</span>
           </div>
           <p class="report-reason">“{{ report.reason }}”</p>
+          <label class="field"><span>审核原因</span><textarea v-model="reviewReasons[report.id]" maxlength="500" rows="2" /></label>
           <p class="report-meta">
             {{ formatDateTime(Date.parse(report.created_at) || 0) }} · 当前喜欢
             {{ report.song?.likes_count ?? 0 }} · 点踩 {{ report.song?.dislikes_count ?? 0 }}

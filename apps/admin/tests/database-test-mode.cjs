@@ -1,0 +1,85 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const { PGlite } = require('@electric-sql/pglite');
+(async () => {
+  const db = new PGlite(), root = path.resolve(__dirname, '../../..');
+  await db.exec(`create role anon; create role authenticated;
+    create schema auth; create table auth.users(id uuid primary key,email text);
+    create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
+    create function auth.email() returns text language sql stable as $$ select nullif(current_setting('request.jwt.claim.email',true),'') $$;
+    create function auth.jwt() returns jsonb language sql stable as $$ select jsonb_build_object('email',auth.email()) $$;
+    grant usage on schema auth to anon,authenticated;`);
+  for (const file of ['supabase-schema.sql','supabase-admin-workflow.sql','supabase-database-integrity.sql','supabase-test-mode.sql','supabase-test-mode.sql'])
+    await db.exec(fs.readFileSync(path.join(root,file),'utf8').replace('create extension if not exists pgcrypto;',''));
+  const admin='11111111-1111-4111-8111-111111111111', tester='22222222-2222-4222-8222-222222222222', stranger='33333333-3333-4333-8333-333333333333';
+  await db.query("insert into auth.users values($1,'admin@example.invalid'),($2,'tester@example.invalid'),($3,'stranger@example.invalid')",[admin,tester,stranger]);
+  await db.query("insert into admin_users(email,user_id) values('admin@example.invalid',$1)",[admin]);
+  const one=async(sql,args=[]) => (await db.query(sql,args)).rows[0];
+  async function login(id,email) {
+    await db.exec('reset role');
+    await db.query("select set_config('request.jwt.claim.sub',$1,false),set_config('request.jwt.claim.email',$2,false)",[id||'',email||'']);
+    await db.exec('set role '+(id?'authenticated':'anon'));
+  }
+  await login(admin,'admin@example.invalid');
+  const period=(await one("select admin_create_playlist_period('测试模式验收',now()-interval '1 day',now()+interval '1 day') id")).id;
+  await assert.rejects(db.query('select admin_set_period_test_mode($1,true,false)',[period]),/先授权/);
+  await assert.rejects(db.query("select admin_set_test_account('missing@example.invalid',true)"),/尚未创建/);
+  await db.query("select admin_set_test_account('TESTER@example.invalid',true)");
+  assert.equal((await db.query('select * from admin_list_test_accounts()')).rows[0].user_id,tester);
+  await login(null,null);
+  const song=(await one("select * from submit_song('公开原有歌曲','歌手',$1,$2)",[period,stranger])).id;
+  assert(song);
+  await login(admin,'admin@example.invalid');
+  await db.query('select admin_set_period_test_mode($1,true,false)',[period]);
+  assert.equal((await one('select is_test from playlist_periods where id=$1',[period])).is_test,true);
+  await assert.rejects(db.query('select admin_set_period_test_mode($1,false,false)',[period]),/其他运营人员/);
+  assert.equal((await one('select count(*)::int n from songs')).n,1);
+  await assert.rejects(db.query("select * from submit_song('管理员不是测试员','歌手',$1,$2)",[period,admin]),/测试账号/);
+  for (const [id,email] of [[null,null],[stranger,'stranger@example.invalid']]) {
+    await login(id,email);
+    assert.equal((await one('select count(*)::int n from songs')).n,0);
+    assert.equal((await one('select count(*)::int n from playlist_periods where id=$1',[period])).n,1);
+    for(const sql of ["select * from submit_song('越权','歌手',$1,$2)","select * from get_my_likes($1,$2)","select * from get_my_dislikes($1,$2)"])
+      await assert.rejects(db.query(sql,[period,stranger]),/测试账号/);
+    for(const action of ['like','unlike'])await assert.rejects(db.query('select * from toggle_song_like($1,$2,$3,$4)',[song,period,stranger,action]),/测试账号/);
+    for(const action of ['dislike','undislike'])await assert.rejects(db.query("select * from toggle_song_dislike($1,$2,$3,$4,'测试理由')",[song,period,stranger,action]),/测试账号/);
+    await assert.rejects(db.query('select admin_set_period_test_mode($1,false,true)',[period]),/Admin permission|permission denied/);
+    await assert.rejects(db.query("select admin_set_test_account('stranger@example.invalid',true)"),/Admin permission|permission denied/);
+    await assert.rejects(db.query('select * from admin_list_test_accounts()'),/Admin permission|permission denied/);
+  }
+  console.log('PASS mode permissions, stale changes, preservation of existing songs, guest/non-tester denial for reads and all mutation/cancellation paths');
+  await login(tester,'tester@example.invalid');
+  assert.equal((await one('select is_current_user_tester() allowed')).allowed,true);
+  assert.equal((await one('select count(*)::int n from songs')).n,1);
+  await assert.rejects(db.query('select * from toggle_song_like($1,$2,$3,\'like\')',[song,period,stranger]),/身份已变化/);
+  const submitted=await one("select * from submit_song('测试投稿','测试歌手',$1,$2)",[period,tester]);assert(submitted.id);assert.equal(submitted.error_code,null);
+  assert.equal((await one("select * from toggle_song_like($1,$2,$3,'like')",[song,period,tester])).liked,true);
+  assert.equal((await db.query('select * from get_my_likes($1,$2)',[period,tester])).rows[0].song_id,song);
+  assert.equal((await one("select * from toggle_song_dislike($1,$2,$3,'dislike','测试理由')",[song,period,tester])).disliked,true);
+  assert.equal((await db.query('select * from get_my_likes($1,$2)',[period,tester])).rows.length,0);
+  assert.equal((await db.query('select * from get_my_dislikes($1,$2)',[period,tester])).rows[0].song_id,song);
+  await assert.rejects(db.query("update test_accounts set enabled=true"),/permission denied/);
+  await assert.rejects(db.query("update playlist_periods set is_test=false"),/permission denied/);
+  await login(admin,'admin@example.invalid');await db.query("select admin_set_test_account('tester@example.invalid',false)");
+  await login(tester,'tester@example.invalid');
+  assert.equal((await one('select is_current_user_tester() allowed')).allowed,false);
+  assert.equal((await one('select count(*)::int n from songs')).n,0);
+  await assert.rejects(db.query("select * from toggle_song_dislike($1,$2,$3,'undislike',null)",[song,period,tester]),/测试账号/);
+  console.log('PASS tester login identity, submission/votes, cookie impersonation denial, direct-write denial and live permission revocation');
+  await login(admin,'admin@example.invalid');
+  await db.query('select admin_set_period_test_mode($1,false,true)',[period]);
+  await login(null,null);assert.equal((await one('select count(*)::int n from songs')).n,2);
+  assert((await one("select * from submit_song('关闭测试后访客投稿','歌手',$1,$2)",[period,stranger])).id);
+  await login(admin,'admin@example.invalid');await db.query("select admin_set_test_account('tester@example.invalid',true)");await db.query('select admin_set_period_test_mode($1,true,false)',[period]);
+  const next=(await one("select admin_create_playlist_period('新正式期',now()-interval '1 day',now()+interval '1 day') id")).id;
+  assert.equal((await one('select is_test from playlist_periods where id=$1',[next])).is_test,false);
+  await login(null,null);assert.equal((await one('select count(*)::int n from playlist_periods where id=$1',[period])).n,0);
+  assert.equal((await one('select count(*)::int n from songs where playlist_date=$1',[period])).n,0);
+  await login(tester,'tester@example.invalid');assert.equal((await one('select count(*)::int n from playlist_periods where id=$1',[period])).n,1);
+  await db.exec('reset role');await db.exec(fs.readFileSync(path.join(root,'supabase-test-mode.sql'),'utf8'));
+  assert.equal((await one('select is_test from playlist_periods where id=$1',[period])).is_test,true);
+  assert.equal((await one("select has_function_privilege('authenticated','public.consume_api_attempt(text,text,text)','execute') allowed")).allowed,false);
+  assert((await one("select count(*)::int n from admin_action_log where action in ('set_test_mode','grant_test_account','revoke_test_account')")).n>=6);
+  await db.close();console.log('ALL TEST MODE DATABASE CHECKS PASSED: repeat migration, public restoration, archived isolation, default-off new periods and audit');
+})().catch(error=>{console.error(error);process.exitCode=1;});

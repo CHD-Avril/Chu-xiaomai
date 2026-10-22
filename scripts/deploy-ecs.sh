@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+for variable in ECS_HOST ECS_USER ECS_SSH_KEY ECS_KNOWN_HOSTS GITHUB_SHA GITHUB_RUN_ID GITHUB_RUN_ATTEMPT; do
+  if [[ -z "${!variable:-}" ]]; then
+    echo "Missing required configuration: $variable" >&2
+    exit 1
+  fi
+done
+
+port="${ECS_PORT:-22}"
+[[ "$ECS_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]] || { echo 'Invalid ECS_HOST' >&2; exit 1; }
+[[ "$ECS_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || { echo 'Invalid ECS_USER' >&2; exit 1; }
+if [[ ! "$port" =~ ^[0-9]{1,5}$ ]]; then echo 'Invalid ECS_PORT' >&2; exit 1; fi
+if (( 10#$port < 1 || 10#$port > 65535 )); then echo 'Invalid ECS_PORT' >&2; exit 1; fi
+release_id="$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+[[ "$release_id" =~ ^[0-9a-f]{40}-[0-9]+-[0-9]+$ ]] || { echo 'Invalid release ID' >&2; exit 1; }
+
+temp_root="$(cd -- "${TMPDIR:-/tmp}" && pwd -P)"
+work_dir="$(mktemp -d "$temp_root/chu-deploy.XXXXXX")"
+[[ "$(dirname -- "$work_dir")" == "$temp_root" && -d "$work_dir" ]] || exit 1
+trap 'rm -rf -- "$work_dir"' EXIT
+chmod 700 "$work_dir"
+# Accept the original OpenSSH key or a single-line base64 copy from the server.
+# Clipboard contents can contain CRLF; OpenSSH expects the key's original LF lines.
+printf '%s\n' "$ECS_SSH_KEY" | tr -d '\r' > "$work_dir/key-input"
+if grep -q '^-----BEGIN OPENSSH PRIVATE KEY-----$' "$work_dir/key-input"; then
+  cp "$work_dir/key-input" "$work_dir/key"
+elif base64 --decode "$work_dir/key-input" > "$work_dir/key-decoded" 2> /dev/null; then
+  tr -d '\r' < "$work_dir/key-decoded" > "$work_dir/key"
+else
+  echo '::error::ECS_SSH_KEY must contain the complete OpenSSH private key or its base64 encoding. Copy it again from the ECS server.' >&2
+  exit 1
+fi
+printf '%s\n' "$ECS_KNOWN_HOSTS" | tr -d '\r' > "$work_dir/known_hosts"
+chmod 600 "$work_dir/key" "$work_dir/known_hosts"
+if ! ssh-keygen -y -P '' -f "$work_dir/key" > /dev/null 2>&1; then
+  echo '::error::ECS_SSH_KEY is incomplete, corrupted, or passphrase-protected. Replace it with the complete unencrypted deployment private key (or base64 encoding), not the .pub file.' >&2
+  exit 1
+fi
+echo 'SSH private key format verified.'
+known_host="$ECS_HOST"
+if [[ "$port" != 22 ]]; then known_host="[$ECS_HOST]:$port"; fi
+ssh-keygen -F "$known_host" -f "$work_dir/known_hosts" > /dev/null || {
+  echo 'ECS_KNOWN_HOSTS does not contain the configured SSH host and port' >&2
+  exit 1
+}
+
+if [[ "${1:-}" == '--preflight' ]]; then
+  ssh -i "$work_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work_dir/known_hosts" -o ConnectTimeout=15 -p "$port" "$ECS_USER@$ECS_HOST" 'sh -s' <<'REMOTE'
+set -eu
+if [ "$(id -u)" = 0 ]; then
+  echo 'QQ_SETUP_ACCESS=root'
+elif sudo -n true 2>/dev/null; then
+  echo 'QQ_SETUP_ACCESS=sudo-root'
+else
+  echo 'QQ_SETUP_ACCESS=limited-deploy'
+fi
+printf 'NODE_VERSION='; node --version
+printf 'QQ_SERVICE='; systemctl is-active chu-qq-auth.service || true
+if [ -s /var/www/chu-xiaomai/current/qq-auth/index.mjs ]; then echo 'QQ_BACKEND_INSTALLED=true'; else echo 'QQ_BACKEND_INSTALLED=false'; fi
+if grep -Rql 'include /etc/nginx/snippets/chu-qq-auth.conf' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null; then echo 'QQ_NGINX_INSTALLED=true'; else echo 'QQ_NGINX_INSTALLED=false'; fi
+REMOTE
+  exit 0
+fi
+
+if [[ "${1:-}" == '--stage-qq' ]]; then
+  setup_name="qq-setup-$GITHUB_SHA"
+  setup_archive="$work_dir/$setup_name.tar.gz"
+  tar -czf "$setup_archive" apps/user/qq-auth/index.mjs apps/user/qq-auth/server.mjs deploy/qq-auth/chu-qq-auth.service deploy/qq-auth/nginx.conf deploy/qq-auth/qq-auth.env.example scripts/setup-qq-auth.sh scripts/install-qq-nginx.mjs scripts/check-qq-login.mjs
+  stage_ssh=(-i "$work_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work_dir/known_hosts" -o ConnectTimeout=15)
+  scp "${stage_ssh[@]}" -P "$port" "$setup_archive" "$ECS_USER@$ECS_HOST:/var/www/chu-xiaomai/incoming/"
+  ssh "${stage_ssh[@]}" -p "$port" "$ECS_USER@$ECS_HOST" "mkdir -p /var/www/chu-xiaomai/incoming/$setup_name && tar -xzf /var/www/chu-xiaomai/incoming/$setup_name.tar.gz -C /var/www/chu-xiaomai/incoming/$setup_name --no-same-owner --no-same-permissions"
+  echo "QQ setup sources staged. Root command: bash /var/www/chu-xiaomai/incoming/$setup_name/scripts/setup-qq-auth.sh"
+  exit 0
+fi
+
+mkdir -p "$work_dir/payload/user" "$work_dir/payload/admin" "$work_dir/payload/qq-auth"
+# Explicit allowlist: never package .env.local, certificates, browser profiles or logs.
+for source in index.mjs server.mjs; do
+  test -s "apps/user/qq-auth/$source"
+  cp "apps/user/qq-auth/$source" "$work_dir/payload/qq-auth/$source"
+done
+for app in user admin; do
+  test -s ".artifacts/build-$app/index.html"
+  cp -a ".artifacts/build-$app/." "$work_dir/payload/$app/"
+done
+printf '%s\n' "$GITHUB_SHA" > "$work_dir/payload/REVISION"
+tar -czf "$work_dir/$release_id.tar.gz" -C "$work_dir/payload" user admin qq-auth REVISION
+cp scripts/ecs-release.sh "$work_dir/$release_id.sh"
+
+ssh_options=(
+  -i "$work_dir/key"
+  -o BatchMode=yes
+  -o IdentitiesOnly=yes
+  -o StrictHostKeyChecking=yes
+  -o "UserKnownHostsFile=$work_dir/known_hosts"
+  -o ConnectTimeout=15
+  -o ServerAliveInterval=15
+  -o ServerAliveCountMax=3
+)
+destination="$ECS_USER@$ECS_HOST"
+scp "${ssh_options[@]}" -P "$port" \
+  "$work_dir/$release_id.tar.gz" "$work_dir/$release_id.sh" \
+  "$destination:/var/www/chu-xiaomai/incoming/"
+ssh "${ssh_options[@]}" -p "$port" "$destination" \
+  "bash /var/www/chu-xiaomai/incoming/$release_id.sh $release_id"
+
+if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+  printf 'Published %s to https://chuxiaomai.cyou/ and /admin/.\n' "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+fi

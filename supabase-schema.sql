@@ -1,5 +1,8 @@
 -- Chu Xiaomai secure Supabase schema / migration.
--- Run this whole file in Supabase SQL Editor.
+-- Fresh installs: run this whole file, then supabase-admin-workflow.sql,
+-- then supabase-database-integrity.sql and supabase-test-mode.sql before allowing traffic.
+
+begin;
 
 create extension if not exists pgcrypto;
 
@@ -224,100 +227,110 @@ create unique index if not exists song_reports_pending_unique
 on public.song_reports (song_id, reporter_cookie)
 where status = 'pending';
 
--- Merge existing duplicate submissions before enforcing the per-period
--- title/artist uniqueness rule. The oldest row is kept and duplicate likes are
--- moved when possible.
-drop table if exists pg_temp.tmp_duplicate_songs;
-create temp table tmp_duplicate_songs on commit drop as
-with ranked_songs as (
-  select
-    id,
-    first_value(id) over (
-      partition by playlist_date, title_lower, artist_lower
-      order by created_at asc, id asc
-    ) as keeper_id,
-    row_number() over (
-      partition by playlist_date, title_lower, artist_lower
-      order by created_at asc, id asc
-    ) as duplicate_rank
-  from public.songs
-)
-select id as duplicate_id, keeper_id
-from ranked_songs
-where duplicate_rank > 1;
+create or replace function public.is_current_user_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select auth.uid() is not null
+    and exists (
+      select 1
+      from public.admin_users admin_user
+      where lower(admin_user.email) = lower(auth.email())
+    );
+$$;
 
-with affected_likes as (
-  select
-    like_row.id,
-    coalesce(duplicate_song.keeper_id, like_row.song_id) as target_song_id,
-    like_row.playlist_date,
-    like_row.user_id,
-    like_row.created_at
-  from public.song_likes like_row
-  left join pg_temp.tmp_duplicate_songs duplicate_song
-    on duplicate_song.duplicate_id = like_row.song_id
-  where duplicate_song.keeper_id is not null
-    or like_row.song_id in (select keeper_id from pg_temp.tmp_duplicate_songs)
-),
-ranked_likes as (
-  select
-    id,
-    row_number() over (
-      partition by target_song_id, playlist_date, user_id
-      order by created_at asc, id asc
-    ) as duplicate_rank
-  from affected_likes
-)
-delete from public.song_likes like_row
-using ranked_likes
-where like_row.id = ranked_likes.id
-  and ranked_likes.duplicate_rank > 1;
-
-with affected_likes as (
-  select
-    like_row.id,
-    coalesce(duplicate_song.keeper_id, like_row.song_id) as target_song_id,
-    like_row.playlist_date,
-    like_row.voter_cookie,
-    like_row.created_at
-  from public.song_likes like_row
-  left join pg_temp.tmp_duplicate_songs duplicate_song
-    on duplicate_song.duplicate_id = like_row.song_id
-  where like_row.voter_cookie is not null
-    and (
-      duplicate_song.keeper_id is not null
-      or like_row.song_id in (select keeper_id from pg_temp.tmp_duplicate_songs)
-    )
-),
-ranked_likes as (
-  select
-    id,
-    row_number() over (
-      partition by target_song_id, playlist_date, voter_cookie
-      order by created_at asc, id asc
-    ) as duplicate_rank
-  from affected_likes
-)
-delete from public.song_likes like_row
-using ranked_likes
-where like_row.id = ranked_likes.id
-  and ranked_likes.duplicate_rank > 1;
-
-update public.song_likes like_row
-set song_id = duplicate_song.keeper_id
-from pg_temp.tmp_duplicate_songs duplicate_song
-where like_row.song_id = duplicate_song.duplicate_id;
-
-delete from public.songs song
-using pg_temp.tmp_duplicate_songs duplicate_song
-where song.id = duplicate_song.duplicate_id;
-
-update public.songs song
-set likes_count = (
-  select count(*)::integer
-  from public.song_likes like_row
-  where like_row.song_id = song.id
+-- Shared safe legacy merge; also embedded in supabase-schema.sql.
+create table if not exists public.database_repair_archive (
+  id uuid primary key default gen_random_uuid(),
+  source_table text not null, source_id text not null, reason text not null,
+  row_data jsonb not null, row_hash text not null, recorded_at timestamptz not null default now(),
+  unique(source_table, source_id, reason, row_hash)
 );
+alter table public.database_repair_archive enable row level security;
+revoke all on public.database_repair_archive from public, anon, authenticated;
+grant select on public.database_repair_archive to authenticated;
+drop policy if exists repair_archive_admin_read on public.database_repair_archive;
+create policy repair_archive_admin_read on public.database_repair_archive for select to authenticated using(public.is_current_user_admin());
+
+create or replace function public.repair_duplicate_songs()
+returns void language plpgsql security definer set search_path = public as $repair$
+declare source_name text;
+begin
+  lock table public.songs, public.song_likes, public.song_dislikes, public.song_reports in share row exclusive mode;
+  drop table if exists pg_temp.song_merge_map;
+  create temp table song_merge_map on commit drop as
+    select id, first_value(id) over(partition by playlist_date,title_lower,artist_lower order by created_at,id) keeper
+    from public.songs;
+  delete from pg_temp.song_merge_map where id=keeper;
+  if not exists(select 1 from pg_temp.song_merge_map) then return; end if;
+  -- Save both duplicates and keepers, all votes and all reports before any transformation.
+  insert into public.database_repair_archive(source_table,source_id,reason,row_data,row_hash)
+    select 'songs',s.id::text,'duplicate_merge',to_jsonb(s),md5(to_jsonb(s)::text) from public.songs s
+    where s.id in(select id from pg_temp.song_merge_map union select keeper from pg_temp.song_merge_map)
+    on conflict do nothing;
+  foreach source_name in array array['song_likes','song_dislikes','song_reports'] loop
+    execute format('insert into public.database_repair_archive(source_table,source_id,reason,row_data,row_hash)
+      select %L,v.id::text,''duplicate_merge'',to_jsonb(v),md5(to_jsonb(v)::text) from public.%I v
+      where v.song_id in(select id from pg_temp.song_merge_map union select keeper from pg_temp.song_merge_map)
+      on conflict do nothing',source_name,source_name);
+  end loop;
+  -- For votes on the merged song, the latest sentiment per browser wins.
+  drop table if exists pg_temp.merged_vote_rank;
+  create temp table merged_vote_rank on commit drop as
+    select *,row_number() over(partition by target,identity order by created_at desc,id desc,kind) rank from (
+      select l.id,coalesce(m.keeper,l.song_id) target,coalesce(l.voter_cookie,l.user_id) identity,l.created_at,'like' kind
+        from public.song_likes l left join pg_temp.song_merge_map m on m.id=l.song_id
+        where l.song_id in(select id from pg_temp.song_merge_map union select keeper from pg_temp.song_merge_map)
+      union all
+      select d.id,coalesce(m.keeper,d.song_id),coalesce(d.voter_cookie,d.user_id),d.created_at,'dislike'
+        from public.song_dislikes d left join pg_temp.song_merge_map m on m.id=d.song_id
+        where d.song_id in(select id from pg_temp.song_merge_map union select keeper from pg_temp.song_merge_map)
+    ) votes;
+  delete from public.song_likes v using pg_temp.merged_vote_rank r where r.kind='like' and r.rank>1 and v.id=r.id;
+  delete from public.song_dislikes v using pg_temp.merged_vote_rank r where r.kind='dislike' and r.rank>1 and v.id=r.id;
+  -- Historic user_id may differ from cookie. Retain newest row compatible with both old unique keys.
+  foreach source_name in array array['song_likes','song_dislikes'] loop
+    execute format('delete from public.%I where id in (
+      select id from(select v.id,row_number() over(partition by coalesce(m.keeper,v.song_id),v.user_id order by v.created_at desc,v.id desc) rank
+      from public.%I v left join pg_temp.song_merge_map m on m.id=v.song_id
+      where v.song_id in(select id from pg_temp.song_merge_map union select keeper from pg_temp.song_merge_map)) r where rank>1)',source_name,source_name);
+    execute format('update public.%I v set song_id=m.keeper from pg_temp.song_merge_map m where v.song_id=m.id',source_name);
+  end loop;
+  -- Duplicate pending reports are archived in full; retain newest active queue item. Reviewed history is all kept.
+  delete from public.song_reports where id in (
+    select id from(select r.id,row_number() over(partition by coalesce(m.keeper,r.song_id),r.reporter_cookie order by r.created_at desc,r.id desc) rank
+      from public.song_reports r left join pg_temp.song_merge_map m on m.id=r.song_id where r.status='pending'
+      and r.song_id in(select id from pg_temp.song_merge_map union select keeper from pg_temp.song_merge_map)) ranked where rank>1);
+  update public.song_reports r set song_id=m.keeper from pg_temp.song_merge_map m where r.song_id=m.id;
+  -- Preserve a previous moderation lock if any duplicate had been locked.
+  update public.songs s set is_locked=true,locked_at=coalesce(s.locked_at,now())
+    where s.id in(select m.keeper from pg_temp.song_merge_map m join public.songs d on d.id=m.id where d.is_locked);
+  if to_regclass('public.broadcast_playlists') is not null then
+    execute 'insert into public.database_repair_archive(source_table,source_id,reason,row_data,row_hash)
+      select ''broadcast_playlists'',b.period_id::text,''duplicate_merge'',to_jsonb(b),md5(to_jsonb(b)::text) from public.broadcast_playlists b
+      where exists(select 1 from jsonb_array_elements(b.items) item join pg_temp.song_merge_map m on m.id::text=item->>''song_id'')
+      on conflict do nothing';
+    execute 'update public.broadcast_playlists b set items=(
+      select coalesce(jsonb_agg(item || jsonb_build_object(''song_id'',target) order by ord),''[]''::jsonb) from (
+        select distinct on(target) item,target,ord from (
+          select item,coalesce(m.keeper::text,item->>''song_id'') target,ord from jsonb_array_elements(b.items) with ordinality a(item,ord)
+          left join pg_temp.song_merge_map m on m.id::text=item->>''song_id''
+        ) mapped order by target,(item->>''status''=''confirmed'') desc,ord
+      ) chosen),version=version+1,updated_at=clock_timestamp() where exists(select 1 from jsonb_array_elements(b.items) item join pg_temp.song_merge_map m on m.id::text=item->>''song_id'')';
+  end if;
+  delete from public.songs s using pg_temp.song_merge_map m where s.id=m.id;
+  update public.songs s set
+    likes_count=(select count(*)::integer from public.song_likes l where l.song_id=s.id),
+    dislikes_count=(select count(*)::integer from public.song_dislikes d where d.song_id=s.id)
+    where s.id in(select keeper from pg_temp.song_merge_map);
+end;
+$repair$;
+revoke all on function public.repair_duplicate_songs() from public,anon,authenticated;
+select public.repair_duplicate_songs();
+
 
 create unique index if not exists songs_period_title_artist_unique
 on public.songs (playlist_date, title_lower, artist_lower);
@@ -566,360 +579,147 @@ begin
 end;
 $$;
 
-create or replace function public.toggle_song_like(
-  p_song_id uuid,
-  p_playlist_date text,
-  p_voter_cookie text,
-  p_action text
-)
-returns table (liked boolean, likes_count integer)
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  normalized_cookie text;
-  client_ip text;
-  next_likes_count integer := 0;
-  max_likes integer;
-  already_liked boolean := false;
+create or replace function public.apply_song_vote(p_song_id uuid,p_period text,p_cookie text,p_action text,p_reason text)
+returns table(liked boolean,disliked boolean,likes_count integer,dislikes_count integer)
+language plpgsql security definer set search_path=public as $vote$
+declare identity text; target uuid; period_record public.playlist_periods%rowtype; song_record public.songs%rowtype; maximum int; already boolean;
 begin
-  normalized_cookie := public.assert_valid_voter_cookie(p_voter_cookie);
-  client_ip := public.request_client_ip();
-  perform public.record_rate_limited_attempt('vote', p_playlist_date, normalized_cookie, client_ip);
-
-  if p_action not in ('like', 'unlike') then
-    raise exception 'Unknown voting action.';
+  identity=public.assert_valid_voter_cookie(p_cookie);
+  begin target=p_period::uuid; exception when invalid_text_representation then raise exception '征集期无效，请刷新页面。'; end;
+  if target is null then raise exception '征集期无效，请刷新页面。'; end if;
+  if p_action is null or p_action not in('like','unlike','dislike','undislike') then raise exception 'Unknown voting action.'; end if;
+  if p_action='dislike' and length(trim(coalesce(p_reason,''))) not between 1 and 20 then raise exception '点踩理由须为 1–20 字。'; end if;
+  perform pg_advisory_xact_lock(hashtextextended('actor:'||target::text||':'||identity,0));
+  select * into period_record from public.playlist_periods where id=target for share;
+  if not found or period_record.status<>'active' or clock_timestamp() not between period_record.starts_at and period_record.ends_at then
+    raise exception '征集已结束或尚未开始，请刷新页面。';
   end if;
-
-  if not exists (
-    select 1
-    from public.songs song
-    join public.playlist_periods period on period.id::text = song.playlist_date
-    where song.id = p_song_id
-      and song.playlist_date = p_playlist_date
-      and coalesce(song.is_locked, false) = false
-      and period.status = 'active'
-      and now() between period.starts_at and period.ends_at
-  ) then
-    raise exception 'This song is locked or not in an open voting period.';
-  end if;
-
-  select exists (
-    select 1
-    from public.song_likes
-    where song_id = p_song_id
-      and playlist_date = p_playlist_date
-      and voter_cookie = normalized_cookie
-  ) into already_liked;
-
-  if p_action = 'like' and not already_liked then
-    select max_likes_per_period
-    into max_likes
-    from public.security_settings
-    where public.security_settings.id = true;
-
-    if (
-      select count(*)::integer
-      from public.song_likes
-      where playlist_date = p_playlist_date
-        and voter_cookie = normalized_cookie
-    ) >= max_likes then
-      raise exception 'This browser has reached the like limit for this period.';
+  select * into song_record from public.songs where id=p_song_id and period_id=target for update;
+  if not found or song_record.is_locked then raise exception '歌曲已锁定或不存在，请刷新页面。'; end if;
+  if p_action='like' then
+    select exists(select 1 from public.song_likes l where l.song_id=p_song_id and l.voter_cookie=identity) into already;
+    if not already then
+      select max_likes_per_period into maximum from public.security_settings where id=true;
+      if (select count(*) from public.song_likes l where l.period_id=target and l.voter_cookie=identity)>=maximum then
+        raise exception '本浏览器已达到本期喜欢数量上限。';
+      end if;
+      delete from public.song_dislikes d where d.song_id=p_song_id and d.voter_cookie=identity;
+      insert into public.song_likes(song_id,user_id,voter_cookie,voter_ip,playlist_date,period_id)
+        values(p_song_id,identity,identity,public.request_client_ip(),target::text,target);
     end if;
-
-    delete from public.song_dislikes
-    where song_id = p_song_id
-      and playlist_date = p_playlist_date
-      and voter_cookie = normalized_cookie;
-
-    insert into public.song_likes (song_id, user_id, playlist_date, voter_cookie, voter_ip)
-    values (p_song_id, normalized_cookie, p_playlist_date, normalized_cookie, client_ip);
-  elsif p_action = 'unlike' then
-    delete from public.song_likes
-    where song_id = p_song_id
-      and playlist_date = p_playlist_date
-      and voter_cookie = normalized_cookie;
+  elsif p_action='unlike' then
+    delete from public.song_likes l where l.song_id=p_song_id and l.voter_cookie=identity;
+  elsif p_action='dislike' then
+    select exists(select 1 from public.song_dislikes d where d.song_id=p_song_id and d.voter_cookie=identity) into already;
+    if not already then
+      delete from public.song_likes l where l.song_id=p_song_id and l.voter_cookie=identity;
+      insert into public.song_dislikes(song_id,user_id,voter_cookie,voter_ip,playlist_date,period_id)
+        values(p_song_id,identity,identity,public.request_client_ip(),target::text,target);
+      insert into public.song_reports(song_id,playlist_date,period_id,reporter_cookie,reporter_ip,reason)
+        values(p_song_id,target::text,target,identity,public.request_client_ip(),trim(p_reason))
+        on conflict(song_id,reporter_cookie) where status='pending' do update set reason=excluded.reason;
+    end if;
+  else
+    delete from public.song_dislikes d where d.song_id=p_song_id and d.voter_cookie=identity;
   end if;
-
-  update public.songs
-  set likes_count = (
-      select count(*)::integer
-      from public.song_likes
-      where song_id = p_song_id
-        and playlist_date = p_playlist_date
-    ),
-    dislikes_count = (
-      select count(*)::integer
-      from public.song_dislikes
-      where song_id = p_song_id
-        and playlist_date = p_playlist_date
-    )
-  where public.songs.id = p_song_id
-  returning public.songs.likes_count into next_likes_count;
-
-  return query
-  select exists (
-    select 1
-    from public.song_likes
-    where song_id = p_song_id
-      and playlist_date = p_playlist_date
-      and voter_cookie = normalized_cookie
-  ), coalesce(next_likes_count, 0);
+  -- The song row was locked before reading/modifying either vote table.
+  update public.songs s set likes_count=(select count(*)::int from public.song_likes l where l.song_id=p_song_id),
+    dislikes_count=(select count(*)::int from public.song_dislikes d where d.song_id=p_song_id) where s.id=p_song_id;
+  return query select exists(select 1 from public.song_likes l where l.song_id=p_song_id and l.voter_cookie=identity),
+    exists(select 1 from public.song_dislikes d where d.song_id=p_song_id and d.voter_cookie=identity),s.likes_count,s.dislikes_count
+    from public.songs s where s.id=p_song_id;
 end;
-$$;
-
-drop function if exists public.toggle_song_dislike(uuid, text, text, text);
-
-create or replace function public.toggle_song_dislike(
-  p_song_id uuid,
-  p_playlist_date text,
-  p_voter_cookie text,
-  p_action text,
-  p_reason text default null
-)
-returns table (disliked boolean, dislikes_count integer)
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  normalized_cookie text;
-  client_ip text;
-  next_dislikes_count integer := 0;
-  already_disliked boolean := false;
-  clean_reason text := btrim(coalesce(p_reason, ''));
+$vote$;
+revoke all on function public.apply_song_vote(uuid,text,text,text,text) from public,anon,authenticated;
+drop function if exists public.toggle_song_like(uuid,text,text,text);
+create function public.toggle_song_like(p_song_id uuid,p_playlist_date text,p_voter_cookie text,p_action text)
+returns table(liked boolean,likes_count integer,error_code text,error_message text)
+language plpgsql security definer set search_path=public as $like$
 begin
-  normalized_cookie := public.assert_valid_voter_cookie(p_voter_cookie);
-  client_ip := public.request_client_ip();
-  perform public.record_rate_limited_attempt('vote', p_playlist_date, normalized_cookie, client_ip);
-
-  if p_action not in ('dislike', 'undislike') then
-    raise exception 'Unknown voting action.';
-  end if;
-
-  if p_action = 'dislike' and (char_length(clean_reason) < 1 or char_length(clean_reason) > 20) then
-    raise exception 'Dislike reason must be 1-20 characters.';
-  end if;
-
-  if not exists (
-    select 1
-    from public.songs song
-    join public.playlist_periods period on period.id::text = song.playlist_date
-    where song.id = p_song_id
-      and song.playlist_date = p_playlist_date
-      and coalesce(song.is_locked, false) = false
-      and period.status = 'active'
-      and now() between period.starts_at and period.ends_at
-  ) then
-    raise exception 'This song is locked or not in an open voting period.';
-  end if;
-
-  select exists (
-    select 1
-    from public.song_dislikes
-    where song_id = p_song_id
-      and playlist_date = p_playlist_date
-      and voter_cookie = normalized_cookie
-  ) into already_disliked;
-
-  if p_action = 'dislike' and not already_disliked then
-    delete from public.song_likes
-    where song_id = p_song_id
-      and playlist_date = p_playlist_date
-      and voter_cookie = normalized_cookie;
-
-    insert into public.song_dislikes (song_id, user_id, playlist_date, voter_cookie, voter_ip)
-    values (p_song_id, normalized_cookie, p_playlist_date, normalized_cookie, client_ip);
-
-    insert into public.song_reports (song_id, playlist_date, reporter_cookie, reporter_ip, reason)
-    values (p_song_id, p_playlist_date, normalized_cookie, client_ip, clean_reason)
-    on conflict (song_id, reporter_cookie)
-    where status = 'pending'
-    do update set reason = excluded.reason;
-  elsif p_action = 'undislike' then
-    delete from public.song_dislikes
-    where song_id = p_song_id
-      and playlist_date = p_playlist_date
-      and voter_cookie = normalized_cookie;
-  end if;
-
-  update public.songs
-  set likes_count = (
-      select count(*)::integer
-      from public.song_likes
-      where song_id = p_song_id
-        and playlist_date = p_playlist_date
-    ),
-    dislikes_count = (
-      select count(*)::integer
-      from public.song_dislikes
-      where song_id = p_song_id
-        and playlist_date = p_playlist_date
-    )
-  where public.songs.id = p_song_id
-  returning public.songs.dislikes_count into next_dislikes_count;
-
-  return query
-  select exists (
-    select 1
-    from public.song_dislikes
-    where song_id = p_song_id
-      and playlist_date = p_playlist_date
-      and voter_cookie = normalized_cookie
-  ), coalesce(next_dislikes_count, 0);
+  perform public.consume_api_attempt('vote',p_playlist_date,p_voter_cookie);
+  begin
+    if p_action is null or p_action not in('like','unlike') then raise exception 'Unknown voting action.'; end if;
+    return query select r.liked,r.likes_count,null::text,null::text from public.apply_song_vote(p_song_id,p_playlist_date,p_voter_cookie,p_action,null) r;
+  exception when others then
+    -- Only this subtransaction is rolled back; consume_api_attempt remains committed.
+    return query select false,0,sqlstate,case when sqlstate in('P0001','23505','23503','23514','22P02') then sqlerrm else '操作失败，请稍后重试。' end;
+  end;
 end;
-$$;
-
-create or replace function public.review_song_report(
-  p_report_id uuid,
-  p_approve boolean
-)
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  report_record record;
+$like$;
+drop function if exists public.toggle_song_dislike(uuid,text,text,text);
+drop function if exists public.toggle_song_dislike(uuid,text,text,text,text);
+create function public.toggle_song_dislike(p_song_id uuid,p_playlist_date text,p_voter_cookie text,p_action text,p_reason text default null)
+returns table(disliked boolean,dislikes_count integer,error_code text,error_message text)
+language plpgsql security definer set search_path=public as $dislike$
 begin
-  if public.is_current_user_admin() is not true then
-    raise exception 'Admin permission required.';
-  end if;
-
-  select *
-  into report_record
-  from public.song_reports
-  where id = p_report_id
-    and status = 'pending'
-  for update;
-
-  if not found then
-    raise exception 'Pending report not found.';
-  end if;
-
-  update public.song_reports
-  set status = case when p_approve then 'approved' else 'rejected' end,
-    reviewed_by = auth.uid()::text,
-    reviewed_at = now()
-  where id = p_report_id;
-
-  if p_approve then
-    update public.songs
-    set is_locked = true,
-      locked_at = now(),
-      locked_by = auth.uid()::text
-    where id = report_record.song_id;
-  end if;
+  perform public.consume_api_attempt('vote',p_playlist_date,p_voter_cookie);
+  begin
+    if p_action is null or p_action not in('dislike','undislike') then raise exception 'Unknown voting action.'; end if;
+    return query select r.disliked,r.dislikes_count,null::text,null::text from public.apply_song_vote(p_song_id,p_playlist_date,p_voter_cookie,p_action,p_reason) r;
+  exception when others then
+    return query select false,0,sqlstate,case when sqlstate in('P0001','23505','23503','23514','22P02') then sqlerrm else '操作失败，请稍后重试。' end;
+  end;
 end;
-$$;
+$dislike$;
 
-create or replace function public.submit_song(
-  p_title text,
-  p_artist text,
-  p_playlist_date text,
-  p_voter_cookie text
-)
-returns table (
-  id uuid,
-  title text,
-  artist text,
-  playlist_date text,
-  likes_count integer,
-  created_at timestamptz
-)
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  normalized_cookie text;
-  client_ip text;
-  clean_title text := btrim(coalesce(p_title, ''));
-  clean_artist text := btrim(coalesce(p_artist, ''));
-  clean_title_lower text;
-  clean_artist_lower text;
-  max_submissions integer;
-  submitter_hash text;
+drop function if exists public.submit_song(text,text,text,text);
+create function public.submit_song(p_title text,p_artist text,p_playlist_date text,p_voter_cookie text)
+returns table(id uuid,title text,artist text,playlist_date text,likes_count integer,created_at timestamptz,error_code text,error_message text)
+language plpgsql security definer set search_path=public as $submit$
+declare identity text; target uuid; period_record public.playlist_periods%rowtype; maximum int;
 begin
-  normalized_cookie := public.assert_valid_voter_cookie(p_voter_cookie);
-  client_ip := public.request_client_ip();
-  perform public.record_rate_limited_attempt('submission', p_playlist_date, normalized_cookie, client_ip);
-
-  if char_length(clean_title) < 1 or char_length(clean_title) > 80 then
-    raise exception 'Song title must be 1-80 characters.';
-  end if;
-
-  if char_length(clean_artist) < 1 or char_length(clean_artist) > 80 then
-    raise exception 'Artist name must be 1-80 characters.';
-  end if;
-
-  if not exists (
-    select 1
-    from public.playlist_periods period
-    where period.id::text = p_playlist_date
-      and period.status = 'active'
-      and now() between period.starts_at and period.ends_at
-  ) then
-    raise exception 'The current period is not open for submissions.';
-  end if;
-
-  submitter_hash := 'cookie:' || md5(normalized_cookie);
-
-  select submission_cookie_per_period
-  into max_submissions
-  from public.security_settings
-  where public.security_settings.id = true;
-
-  if (
-    select count(*)::integer
-    from public.songs song
-    where song.playlist_date = p_playlist_date
-      and song.created_by = submitter_hash
-  ) >= max_submissions then
-    raise exception 'This browser has reached the submission limit for this period.';
-  end if;
-
-  clean_title_lower := lower(clean_title);
-  clean_artist_lower := lower(clean_artist);
-
-  if exists (
-    select 1
-    from public.songs song
-    where song.playlist_date = p_playlist_date
-      and song.title_lower = clean_title_lower
-      and song.artist_lower = clean_artist_lower
-  ) then
-    raise exception 'This song is already in the current playlist.';
-  end if;
-
-  return query
-  insert into public.songs (
-    title,
-    artist,
-    title_lower,
-    artist_lower,
-    playlist_date,
-    likes_count,
-    created_by
-  )
-  values (
-    clean_title,
-    clean_artist,
-    clean_title_lower,
-    clean_artist_lower,
-    p_playlist_date,
-    0,
-    submitter_hash
-  )
-  returning public.songs.id,
-    public.songs.title,
-    public.songs.artist,
-    public.songs.playlist_date,
-    public.songs.likes_count,
-    public.songs.created_at;
+  perform public.consume_api_attempt('submission',p_playlist_date,p_voter_cookie);
+  begin
+    identity=public.assert_valid_voter_cookie(p_voter_cookie);
+    if length(trim(coalesce(p_title,''))) not between 1 and 80 or length(trim(coalesce(p_artist,''))) not between 1 and 80 then
+      raise exception '歌名和歌手须为 1–80 字。';
+    end if;
+    begin target=p_playlist_date::uuid; exception when invalid_text_representation then raise exception '征集期无效，请刷新页面。'; end;
+    if target is null then raise exception '征集期无效，请刷新页面。'; end if;
+    perform pg_advisory_xact_lock(hashtextextended('actor:'||target::text||':'||identity,0));
+    select * into period_record from public.playlist_periods where public.playlist_periods.id=target for share;
+    if not found or period_record.status<>'active' or clock_timestamp() not between period_record.starts_at and period_record.ends_at then
+      raise exception '征集已结束或尚未开始，请刷新页面。';
+    end if;
+    select submission_cookie_per_period into maximum from public.security_settings where public.security_settings.id=true;
+    if (select count(*) from public.songs s where s.period_id=target and s.created_by='cookie:'||md5(identity))>=maximum then
+      raise exception '本浏览器已达到本期投稿数量上限。';
+    end if;
+    return query insert into public.songs as s(title,artist,title_lower,artist_lower,playlist_date,period_id,created_by)
+      values(trim(p_title),trim(p_artist),lower(trim(p_title)),lower(trim(p_artist)),target::text,target,'cookie:'||md5(identity))
+      returning s.id,s.title,s.artist,s.playlist_date,s.likes_count,s.created_at,null::text,null::text;
+  exception when unique_violation then
+    return query select null::uuid,null::text,null::text,null::text,0,null::timestamptz,'23505'::text,'本期已有同名、同歌手的歌曲。'::text;
+  when others then
+    return query select null::uuid,null::text,null::text,null::text,0,null::timestamptz,sqlstate,
+      case when sqlstate in('P0001','23503','23514','22P02') then sqlerrm else '投稿失败，请稍后重试。' end;
+  end;
 end;
-$$;
+$submit$;
+revoke all on function public.toggle_song_like(uuid,text,text,text) from public;
+revoke all on function public.toggle_song_dislike(uuid,text,text,text,text) from public;
+revoke all on function public.submit_song(text,text,text,text) from public;
+grant execute on function public.toggle_song_like(uuid,text,text,text) to anon,authenticated;
+grant execute on function public.toggle_song_dislike(uuid,text,text,text,text) to anon,authenticated;
+grant execute on function public.submit_song(text,text,text,text) to anon,authenticated;
+
+-- Internal moderation implementation follows the same song -> report lock order as voting.
+create or replace function public.review_song_report(p_report_id uuid,p_approve boolean)
+returns void language plpgsql security definer set search_path=public as $review$
+declare report_record public.song_reports%rowtype; target uuid;
+begin
+  if public.is_current_user_admin() is not true then raise exception 'Admin permission required.'; end if;
+  select song_id into target from public.song_reports where public.song_reports.id=p_report_id;
+  if target is null then raise exception 'Pending report not found.'; end if;
+  perform 1 from public.songs where public.songs.id=target for update;
+  select * into report_record from public.song_reports where public.song_reports.id=p_report_id and status='pending' for update;
+  if not found then raise exception 'Pending report not found.'; end if;
+  update public.song_reports set status=case when p_approve then 'approved' else 'rejected' end,reviewed_by=auth.uid()::text,reviewed_at=clock_timestamp() where public.song_reports.id=p_report_id;
+  if p_approve then update public.songs set is_locked=true,locked_at=clock_timestamp(),locked_by=auth.uid()::text where public.songs.id=target; end if;
+end;
+$review$;
+revoke all on function public.review_song_report(uuid,boolean) from public,anon,authenticated;
+
 
 -- ---------------------------------------------------------------------
 -- RLS and privileges
@@ -997,7 +797,7 @@ on public.songs to anon, authenticated;
 
 grant select (id, title, starts_at, ends_at, status, created_at, updated_at, archived_at)
 on public.playlist_periods to anon, authenticated;
-grant insert, update, delete on public.playlist_periods to authenticated;
+revoke insert, update, delete on public.playlist_periods from authenticated;
 
 grant select (id, title, content, is_active, created_at, updated_at)
 on public.announcements to anon, authenticated;
@@ -1028,7 +828,7 @@ grant execute on function public.get_my_likes(text, text) to anon, authenticated
 grant execute on function public.get_my_dislikes(text, text) to anon, authenticated;
 grant execute on function public.toggle_song_like(uuid, text, text, text) to anon, authenticated;
 grant execute on function public.toggle_song_dislike(uuid, text, text, text, text) to anon, authenticated;
-grant execute on function public.review_song_report(uuid, boolean) to authenticated;
+revoke all on function public.review_song_report(uuid, boolean) from authenticated, anon;
 grant execute on function public.submit_song(text, text, text, text) to anon, authenticated;
 grant usage on schema public to anon, authenticated;
 
@@ -1136,6 +936,7 @@ using (public.is_current_user_admin());
 -- SECURITY DEFINER RPC functions.
 
 notify pgrst, 'reload schema';
+commit;
 
 -- ---------------------------------------------------------------------
 -- Admin bootstrap helper

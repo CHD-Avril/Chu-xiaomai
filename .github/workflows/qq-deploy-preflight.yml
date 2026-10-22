@@ -1,0 +1,36 @@
+name: QQ deployment preflight
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/qq-login-release]
+    paths: [.github/workflows/qq-deploy-preflight.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    name: Inspect QQ server readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Inspect existing deployment account and QQ installation
+        env:
+          ECS_HOST: ${{ secrets.ECS_HOST }}
+          ECS_USER: ${{ secrets.ECS_USER }}
+          ECS_SSH_KEY: ${{ secrets.ECS_SSH_KEY }}
+          ECS_KNOWN_HOSTS: ${{ secrets.ECS_KNOWN_HOSTS }}
+          ECS_PORT: ${{ vars.ECS_PORT || '22' }}
+        run: bash scripts/deploy-ecs.sh --preflight
+      - name: Stage reviewed QQ backend installation files
+        env:
+          ECS_HOST: ${{ secrets.ECS_HOST }}
+          ECS_USER: ${{ secrets.ECS_USER }}
+          ECS_SSH_KEY: ${{ secrets.ECS_SSH_KEY }}
+          ECS_KNOWN_HOSTS: ${{ secrets.ECS_KNOWN_HOSTS }}
+          ECS_PORT: ${{ vars.ECS_PORT || '22' }}
+        run: bash scripts/deploy-ecs.sh --stage-qq

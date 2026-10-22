@@ -24,7 +24,9 @@ export function getOrCreateVisitorId() {
   const existingId = getCookieValue(VISITOR_COOKIE_NAME);
   if (existingId) return existingId;
 
-  const legacyId = localStorage.getItem(LEGACY_VISITOR_STORAGE_KEY);
+  let legacyId = "";
+  try { legacyId = localStorage.getItem(LEGACY_VISITOR_STORAGE_KEY); }
+  catch { /* A persistent cookie is sufficient when local storage is unavailable. */ }
   const nextId =
     legacyId ||
     (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -32,8 +34,9 @@ export function getOrCreateVisitorId() {
       : `visitor_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
   setVoterCookie(nextId);
   if (getCookieValue(VISITOR_COOKIE_NAME) !== nextId) {
-    throw new Error("浏览器必须允许本站 Cookie 后才能投票，请关闭无痕/禁用 Cookie 模式后重试。");
+    throw new Error("请允许本站 Cookie 后再投稿和投票，你仍可以浏览歌单和公告。");
   }
-  localStorage.setItem(LEGACY_VISITOR_STORAGE_KEY, nextId);
+  try { localStorage.setItem(LEGACY_VISITOR_STORAGE_KEY, nextId); }
+  catch { /* The visitor identity is already retained in the cookie. */ }
   return nextId;
 }

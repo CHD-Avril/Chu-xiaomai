@@ -1,7 +1,6 @@
 // 运营端数据访问层 —— 封装全部管理查询与 RPC 调用
 import { supabase } from "./supabase";
-
-const PERIODS_TABLE = "playlist_periods";
+import { readPeriodRows } from "../../../shared/periods";
 
 // ---------- 认证 ----------
 
@@ -20,61 +19,58 @@ export async function isCurrentUserAdmin() {
 // ---------- 征集期 ----------
 
 export async function fetchAllPeriods() {
-  const { data, error } = await supabase
-    .from(PERIODS_TABLE)
-    .select("id,title,starts_at,ends_at,status,created_at,updated_at,archived_at")
-    .order("created_at", { ascending: false })
-    .limit(100);
-  if (error) throw error;
-  return (data ?? []).map(normalizePeriod);
+  return (await readPeriodRows(supabase)).map(normalizePeriod);
 }
 
-export async function upsertPeriod({ id = null, title, startsAt, endsAt, createdBy }) {
-  const payload = {
-    title,
-    starts_at: new Date(startsAt).toISOString(),
-    ends_at: new Date(endsAt).toISOString(),
-    status: "active",
-    updated_at: new Date().toISOString(),
-  };
-  const { error } = id
-    ? await supabase.from(PERIODS_TABLE).update(payload).eq("id", id)
-    : await supabase.from(PERIODS_TABLE).insert({ ...payload, created_by: createdBy });
-  if (error) throw error;
+export async function upsertPeriod({ id = null, title, startsAt, endsAt }) {
+  if (!id) return createPeriod({ title, startsAt, endsAt });
+  const { error } = await supabase.rpc("admin_update_playlist_period", {
+    p_period_id: id, p_title: title, p_starts_at: new Date(startsAt).toISOString(), p_ends_at: new Date(endsAt).toISOString(),
+  });
+  if (error) throwWorkflowError(error);
 }
 
-export async function archiveAllActivePeriods() {
-  const { error } = await supabase
-    .from(PERIODS_TABLE)
-    .update({ status: "archived", updated_at: new Date().toISOString() })
-    .eq("status", "active");
-  if (error) throw error;
+export async function createPeriod({ title, startsAt, endsAt }) {
+  const { data, error } = await supabase.rpc("admin_create_playlist_period", {
+    p_title: title, p_starts_at: new Date(startsAt).toISOString(), p_ends_at: new Date(endsAt).toISOString(),
+  });
+  if (error) throwWorkflowError(error);
+  return data;
 }
 
 export async function archivePeriod(periodId) {
-  const { error } = await supabase
-    .from(PERIODS_TABLE)
-    .update({
-      status: "archived",
-      archived_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", periodId);
-  if (error) throw error;
+  const { error } = await supabase.rpc("admin_archive_playlist_period", { p_period_id: periodId });
+  if (error) throwWorkflowError(error);
+}
+
+export async function setPeriodTestMode(periodId, enabled, expected) {
+  const { error } = await supabase.rpc("admin_set_period_test_mode", { p_period_id: periodId, p_enabled: enabled, p_expected: expected });
+  if (error) throwWorkflowError(error);
+}
+
+export async function fetchTestAccounts() {
+  const { data, error } = await supabase.rpc("admin_list_test_accounts");
+  if (error) throwWorkflowError(error);
+  return data ?? [];
+}
+
+export async function setTestAccount(email, enabled) {
+  const { error } = await supabase.rpc("admin_set_test_account", { p_email: email.trim(), p_enabled: enabled });
+  if (error) throwWorkflowError(error);
 }
 
 // ---------- 歌曲 ----------
 
 export async function fetchSongs(periodId) {
-  const { data, error } = await supabase
-    .from("songs")
-    .select(
-      "id,title,artist,title_lower,artist_lower,playlist_date,likes_count,dislikes_count,is_locked,created_at,created_by",
-    )
-    .eq("playlist_date", periodId)
-    .limit(500);
-  if (error) throw error;
-  return mapSongs(data);
+  const rows = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await supabase.from("songs")
+      .select("id,title,artist,title_lower,artist_lower,playlist_date,likes_count,dislikes_count,is_locked,created_at")
+      .eq("playlist_date", periodId).order("created_at").order("id").range(offset, offset + 499);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if (!data || data.length < 500) return mapSongs(rows);
+  }
 }
 
 // ---------- 公告 ----------
@@ -83,9 +79,8 @@ export async function fetchAnnouncements() {
   const { data, error } = await supabase
     .from("announcements")
     .select("id,title,content,is_active,created_at,updated_at")
-    .eq("is_active", true)
     .order("created_at", { ascending: false })
-    .limit(20);
+    .limit(100);
   if (error) throw error;
   return data ?? [];
 }
@@ -108,51 +103,109 @@ export async function disableAnnouncement(id) {
   if (error) throw error;
 }
 
+export async function updateAnnouncement(id, { title, content }) {
+  const { error } = await supabase.from("announcements").update({ title, content, updated_at: new Date().toISOString() }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function updateSong(song, reason) {
+  const { error } = await supabase.rpc("admin_update_song", {
+    p_song_id: song.id, p_title: song.title.trim(), p_artist: song.artist.trim(), p_locked: song.isLocked, p_reason: reason.trim(),
+  });
+  if (error?.code === "23505") throw new Error("本期已有同名、同歌手的歌曲，请检查后再保存。");
+  if (error) throwWorkflowError(error);
+}
+
+export async function fetchSongLog(songId) {
+  const { data, error } = await supabase.from("admin_action_log").select("id,actor_name,action,details,created_at")
+    .eq("target_id", songId).order("created_at", { ascending: false }).limit(100);
+  if (error) throwWorkflowError(error);
+  return data ?? [];
+}
+
+export async function setSongLock(songId, locked, reason) {
+  const { error } = await supabase.rpc("admin_set_song_lock", { p_song_id: songId, p_locked: locked, p_reason: reason.trim() });
+  if (error) throwWorkflowError(error);
+}
+
 // ---------- 举报 ----------
 
 export async function fetchPendingReports() {
-  const { data, error } = await supabase
-    .from("song_reports")
-    .select(
-      "id,song_id,playlist_date,reason,status,created_at,song:songs(title,artist,likes_count,dislikes_count,is_locked)",
-    )
-    .eq("status", "pending")
-    .order("created_at", { ascending: true })
-    .limit(100);
-  if (error) throw error;
-  return data ?? [];
+  const rows = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await supabase.from("song_reports")
+      .select("id,song_id,playlist_date,reason,status,created_at,song:songs(title,artist,likes_count,dislikes_count,is_locked)")
+      .eq("status", "pending").order("created_at").order("id").range(offset, offset + 499);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if (!data || data.length < 500) return rows;
+  }
 }
 
 export async function fetchAllReports(periodId) {
-  const { data, error } = await supabase
-    .from("song_reports")
-    .select("id,song_id,playlist_date,reporter_cookie,reporter_ip,reason,status,reviewed_by,reviewed_at,created_at")
-    .eq("playlist_date", periodId)
-    .order("created_at", { ascending: true })
-    .limit(5000);
-  if (error) throw error;
+  return fetchEveryPage(() => supabase.from("song_reports")
+    .select("id,song_id,playlist_date,reporter_cookie,reporter_ip,reason,status,reviewed_by,reviewed_by_name,review_reason,reviewed_at,created_at")
+    .eq("playlist_date", periodId).order("created_at").order("id"));
+}
+
+export async function reviewReport(reportId, approve, reason) {
+  const { error } = await supabase.rpc("admin_review_song_report", {
+    p_report_id: reportId,
+    p_approve: approve,
+    p_reason: reason.trim(),
+  });
+  if (error) throwWorkflowError(error);
+}
+
+export async function fetchReviewedReports() {
+  const { data, error } = await supabase.from("song_reports")
+    .select("id,song_id,playlist_date,reason,status,reviewed_by,reviewed_by_name,review_reason,reviewed_at,song:songs(title,artist,is_locked)")
+    .neq("status", "pending").order("reviewed_at", { ascending: false }).limit(500);
+  if (error) throwWorkflowError(error);
   return data ?? [];
 }
 
-export async function reviewReport(reportId, approve) {
-  const { error } = await supabase.rpc("review_song_report", {
-    p_report_id: reportId,
-    p_approve: approve,
-  });
-  if (error) throw error;
+export async function fetchBroadcastPlaylist(periodId) {
+  const { data, error } = await supabase.from("broadcast_playlists")
+    .select("period_id,items,version,updated_by_name,updated_at").eq("period_id", periodId).maybeSingle();
+  if (error) throwWorkflowError(error);
+  return data ?? { items: [], version: 0 };
+}
+
+export async function saveBroadcastPlaylist(periodId, items, version) {
+  const { error } = await supabase.rpc("admin_save_broadcast_playlist", { p_period_id: periodId, p_items: items, p_version: version });
+  if (error) throwWorkflowError(error);
+  // The server owns confirmed snapshots. Read canonical data instead of trusting local draft fields.
+  try {
+    return await fetchBroadcastPlaylist(periodId);
+  } catch {
+    throw new Error("歌单已保存，但读取确认快照失败。请重新读取歌单后继续编辑。");
+  }
+}
+
+function throwWorkflowError(error) {
+  if (["PGRST202", "PGRST204", "PGRST205", "42P01", "42703", "42883"].includes(error.code)) {
+      throw new Error("管理台数据库尚未升级，请依次执行 supabase-admin-workflow.sql、supabase-database-integrity.sql、supabase-test-mode.sql 后重试。");
+  }
+  throw error;
 }
 
 // ---------- 投票明细 / 防作弊 ----------
 
 export async function fetchVoteRows(tableName, periodId) {
-  const { data, error } = await supabase
-    .from(tableName)
+  return fetchEveryPage(() => supabase.from(tableName)
     .select("id,song_id,user_id,voter_cookie,voter_ip,playlist_date,created_at")
-    .eq("playlist_date", periodId)
-    .order("created_at", { ascending: true })
-    .limit(5000);
-  if (error) throw error;
-  return data ?? [];
+    .eq("playlist_date", periodId).order("created_at").order("id"));
+}
+
+async function fetchEveryPage(query) {
+  const rows = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await query().range(offset, offset + 499);
+    if (error) throwWorkflowError(error);
+    rows.push(...(data ?? []));
+    if (!data || data.length < 500) return rows;
+  }
 }
 
 // ---------- 数据整形 ----------
@@ -164,6 +217,7 @@ export function normalizePeriod(period) {
     startsAt: Date.parse(period.starts_at ?? "") || 0,
     endsAt: Date.parse(period.ends_at ?? "") || 0,
     status: period.status ?? "archived",
+    isTest: period.is_test === true,
     createdAtMs: Date.parse(period.created_at ?? "") || 0,
     archivedAtMs: Date.parse(period.archived_at ?? "") || 0,
   };

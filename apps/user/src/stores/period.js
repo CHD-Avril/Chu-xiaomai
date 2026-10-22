@@ -3,6 +3,7 @@ import { fetchPeriods, fetchArchivedPeriods, fetchSongs } from "../services/api"
 
 export const usePeriodStore = defineStore("period", {
   state: () => ({
+    now: Date.now(),
     periods: [],
     currentPeriod: null,
     archivedPeriods: [],
@@ -16,8 +17,7 @@ export const usePeriodStore = defineStore("period", {
     isWithinCurrentPeriod(state) {
       const period = state.currentPeriod;
       if (!period) return false;
-      const now = Date.now();
-      return period.startsAt <= now && now <= period.endsAt;
+      return period.status === "active" && period.startsAt <= state.now && state.now <= period.endsAt;
     },
   },
 

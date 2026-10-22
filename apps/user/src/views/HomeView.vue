@@ -1,24 +1,18 @@
 <script setup>
-import { ref } from "vue";
 import HeroSection from "../components/HeroSection.vue";
-import StatsRow from "../components/StatsRow.vue";
 import NoticeBoard from "../components/NoticeBoard.vue";
 import SubmissionForm from "../components/SubmissionForm.vue";
-
-const submitSection = ref(null);
-
-function scrollToSubmit() {
-  submitSection.value?.$el.scrollIntoView({ behavior: "smooth", block: "center" });
-}
+import SongPreview from "../components/SongPreview.vue";
+import ParticipationGuide from "../components/ParticipationGuide.vue";
 </script>
 
 <template>
-  <div>
-    <HeroSection @go-submit="scrollToSubmit" />
-    <StatsRow />
-    <div class="content-grid">
-      <NoticeBoard />
-      <SubmissionForm ref="submitSection" />
+  <div class="home-page">
+    <div class="home-stage">
+      <div class="home-intro"><HeroSection /></div>
+      <SubmissionForm />
     </div>
+    <div class="community-grid"><SongPreview /><NoticeBoard /></div>
+    <ParticipationGuide />
   </div>
 </template>

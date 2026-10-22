@@ -387,13 +387,13 @@ async function handleSongSubmit(event) {
   updateFormHint("正在提交你的歌单...", false);
 
   try {
-    const { error } = await supabase.rpc("submit_song", {
+    const { data, error } = await supabase.rpc("submit_song", {
       p_title: title,
       p_artist: artist,
       p_playlist_date: state.currentPeriod.id,
       p_voter_cookie: state.userId,
     });
-    if (error) throw error;
+    assertMutationResult(data, error);
     refs.form.reset();
     updateFormHint("投稿成功，愿这首歌被更多人听见。", false);
     await syncAllData();
@@ -494,23 +494,23 @@ async function handleDislikeClick(button) {
 }
 
 async function likeSong(songId) {
-  const { error } = await supabase.rpc("toggle_song_like", {
+  const { data, error } = await supabase.rpc("toggle_song_like", {
     p_song_id: songId,
     p_playlist_date: state.currentPeriod.id,
     p_voter_cookie: state.userId,
     p_action: "like",
   });
-  if (error) throw error;
+  assertMutationResult(data, error);
 }
 
 async function unlikeSong(songId) {
-  const { error } = await supabase.rpc("toggle_song_like", {
+  const { data, error } = await supabase.rpc("toggle_song_like", {
     p_song_id: songId,
     p_playlist_date: state.currentPeriod.id,
     p_voter_cookie: state.userId,
     p_action: "unlike",
   });
-  if (error) throw error;
+  assertMutationResult(data, error);
 }
 
 function promptDislikeReason(song) {
@@ -530,25 +530,25 @@ function promptDislikeReason(song) {
 }
 
 async function dislikeSong(songId, reason) {
-  const { error } = await supabase.rpc("toggle_song_dislike", {
+  const { data, error } = await supabase.rpc("toggle_song_dislike", {
     p_song_id: songId,
     p_playlist_date: state.currentPeriod.id,
     p_voter_cookie: state.userId,
     p_action: "dislike",
     p_reason: reason,
   });
-  if (error) throw error;
+  assertMutationResult(data, error);
 }
 
 async function undislikeSong(songId) {
-  const { error } = await supabase.rpc("toggle_song_dislike", {
+  const { data, error } = await supabase.rpc("toggle_song_dislike", {
     p_song_id: songId,
     p_playlist_date: state.currentPeriod.id,
     p_voter_cookie: state.userId,
     p_action: "undislike",
     p_reason: null,
   });
-  if (error) throw error;
+  assertMutationResult(data, error);
 }
 
 function handlePaginationClick(event) {
@@ -786,9 +786,12 @@ async function handleReportReviewClick(event) {
   state.reviewingReportId = reportId;
   renderReportReview("正在处理举报...", false);
   try {
-    const { error } = await supabase.rpc("review_song_report", {
+    const reviewReason = window.prompt("请填写审核原因（1–500字）：", "");
+    if (!reviewReason?.trim() || Array.from(reviewReason.trim()).length > 500) throw new Error("请填写 1–500 字审核原因。");
+    const { error } = await supabase.rpc("admin_review_song_report", {
       p_report_id: reportId,
       p_approve: approve,
+      p_reason: reviewReason.trim(),
     });
     if (error) throw error;
     await fetchReports();
@@ -1227,25 +1230,9 @@ async function handlePeriodSubmit(event) {
   refs.savePeriodBtn.disabled = true;
   updatePeriodHint("正在保存征集期...", false);
   try {
-    const { error: archiveError } = await supabase
-      .from(PERIODS_TABLE)
-      .update({ status: "archived", updated_at: new Date().toISOString() })
-      .eq("status", "active");
-    if (archiveError) throw archiveError;
-
-    const payload = {
-      title,
-      starts_at: startsAt.toISOString(),
-      ends_at: endsAt.toISOString(),
-      status: "active",
-      updated_at: new Date().toISOString(),
-    };
-    const { error } = state.currentPeriod
-      ? await supabase.from(PERIODS_TABLE).update(payload).eq("id", state.currentPeriod.id)
-      : await supabase.from(PERIODS_TABLE).insert({
-          ...payload,
-          created_by: state.adminUser?.id,
-        });
+    const args = { p_title: title, p_starts_at: startsAt.toISOString(), p_ends_at: endsAt.toISOString() };
+    if (state.currentPeriod) args.p_period_id = state.currentPeriod.id;
+    const { error } = await supabase.rpc(state.currentPeriod ? "admin_update_playlist_period" : "admin_create_playlist_period", args);
     if (error) throw error;
     await syncPeriods();
     await syncAllData();
@@ -1272,10 +1259,7 @@ async function handleArchiveCurrentPeriod() {
   refs.archivePeriodBtn.disabled = true;
   updatePeriodHint("正在归档当前歌单...", false);
   try {
-    const { error } = await supabase
-      .from(PERIODS_TABLE)
-      .update({ status: "archived", archived_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq("id", state.currentPeriod.id);
+    const { error } = await supabase.rpc("admin_archive_playlist_period", { p_period_id: state.currentPeriod.id });
     if (error) throw error;
     const archivedId = state.currentPeriod.id;
     state.currentPeriod = null;
@@ -1967,4 +1951,10 @@ function escapeHtml(value) {
 
 function resolveErrorMessage(error) {
   return error?.message || error?.details || "未知错误";
+}
+
+function assertMutationResult(data, error) {
+  if (error) throw error;
+  const result = Array.isArray(data) ? data[0] : data;
+  if (result?.error_code || result?.error_message) throw new Error(result.error_message || "操作失败，请稍后重试。");
 }

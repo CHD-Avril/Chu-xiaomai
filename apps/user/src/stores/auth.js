@@ -2,16 +2,27 @@ import { defineStore } from "pinia";
 import { supabase, hasValidConfig } from "../services/supabase";
 import { getOrCreateVisitorId } from "../services/identity";
 import { isAdminEmailAllowed, isCurrentUserAdmin } from "../services/api";
-import { qqAuthBase, qqEnabled, QQ_USER_STORAGE_KEY } from "../services/qq";
+import { qqEnabled, QQ_USER_STORAGE_KEY, qqRequest, qqErrorMessages, getQqAuthorizeUrl } from "../services/qq";
+import { readRequest } from "../services/readRequest";
+
+let testSessionRequest = 0;
+let qqSessionRequest = 0;
 
 export const useAuthStore = defineStore("auth", {
   state: () => ({
     visitorId: "",
     backendReady: false,
     configError: false,
+    identityError: "",
     isAdmin: false,
     adminUser: null,
     qqUser: null,
+    qqBusy: false,
+    qqMode: "",
+    qqError: "",
+    testUser: null,
+    isTester: false,
+    testAuthBusy: false,
   }),
 
   getters: {
@@ -19,15 +30,76 @@ export const useAuthStore = defineStore("auth", {
   },
 
   actions: {
+    async syncTestSession(sessionOverride) {
+      const request = ++testSessionRequest;
+      let session = sessionOverride;
+      if (session === undefined && supabase) {
+        let data;
+        try { data = await readRequest("读取测试登录状态", () => supabase.auth.getSession()); }
+        catch (error) { if (request === testSessionRequest) this.clearTestSession(); throw error; }
+        session = data.session;
+      }
+      if (request !== testSessionRequest) return false;
+      if (this.testUser?.id !== session?.user?.id) this.isTester = false;
+      this.testUser = session?.user ?? null;
+      if (!this.testUser) this.isTester = false;
+      if (!this.testUser) return false;
+      try {
+        const data = await readRequest("验证测试账号权限", (signal) => supabase.rpc("is_current_user_tester").abortSignal(signal));
+        if (request === testSessionRequest) this.isTester = data === true;
+        return request === testSessionRequest && this.isTester;
+      } catch (error) {
+        if (request === testSessionRequest) this.clearTestSession();
+        throw error;
+      }
+    },
+
+    clearTestSession() {
+      testSessionRequest += 1;
+      this.testUser = null;
+      this.isTester = false;
+    },
+
+    async testLogin(email, password) {
+      if (!supabase) throw new Error("暂时无法连接登录服务。");
+      this.testAuthBusy = true;
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+        if (error) throw new Error("登录失败，请检查邮箱和密码，或联系运营人员确认账号。");
+        if (!await this.syncTestSession(data.session)) {
+          await supabase.auth.signOut({ scope: "local" });
+          this.clearTestSession();
+          throw new Error("该账号尚未获得测试权限，请联系运营人员授权。");
+        }
+      } finally {
+        this.testAuthBusy = false;
+      }
+    },
+
+    async testLogout() {
+      this.clearTestSession();
+      if (supabase) {
+        const { error } = await supabase.auth.signOut({ scope: "local" });
+        if (error) throw new Error("退出未完成，请重试。");
+      }
+    },
+
     // 初始化访客身份（Cookie），标记后端可用
     initIdentity() {
+      this.identityError = "";
+      this.visitorId = "";
+      this.backendReady = hasValidConfig;
+      this.configError = !hasValidConfig;
       if (!hasValidConfig) {
-        this.configError = true;
-        this.backendReady = false;
-        return;
+        return false;
       }
-      this.visitorId = getOrCreateVisitorId();
-      this.backendReady = true;
+      try {
+        this.visitorId = getOrCreateVisitorId();
+        return true;
+      } catch {
+        this.identityError = "浏览器暂未允许本站 Cookie，仍可浏览歌单和公告。允许本站 Cookie 后，可重新尝试开启投稿和投票。";
+        return false;
+      }
     },
 
     async syncAdminSession(sessionOverride) {
@@ -84,59 +156,57 @@ export const useAuthStore = defineStore("auth", {
       this.setAdmin(false);
     },
 
-    // ---------- QQ 登录（任务①，Mock 联调） ----------
-
-    restoreQqUser() {
-      if (!qqEnabled) return;
+    // ---------- QQ login: server-verified HttpOnly session ----------
+    async restoreQqUser() {
+      try { localStorage.removeItem(QQ_USER_STORAGE_KEY); } catch { /* Legacy data is never trusted. */ }
+      if (!qqEnabled || this.qqBusy) return;
+      const request = ++qqSessionRequest;
       try {
-        const saved = localStorage.getItem(QQ_USER_STORAGE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed?.openid) this.qqUser = parsed;
-        }
+        const data = await qqRequest("/session");
+        if (request !== qqSessionRequest) return;
+        this.qqUser = data.user?.openid ? data.user : null;
+        this.qqMode = data.mode;
       } catch (error) {
-        console.warn("恢复 QQ 登录态失败:", error);
+        if (request !== qqSessionRequest) return;
+        this.qqUser = null;
+        this.qqError = error.message;
       }
     },
 
-    // 跳转 QQ 授权页（Mock 模式下为本地模拟登录页）
+    readQqCallbackError() {
+      const url = new URL(location.href);
+      const error = url.searchParams.get("qq_error");
+      if (!error) return;
+      this.qqError = qqErrorMessages[error] || "QQ 登录未完成，请重试。";
+      url.searchParams.delete("qq_error");
+      history.replaceState(history.state, "", url.pathname + url.search + url.hash);
+    },
+
     qqLogin() {
-      if (!qqEnabled) return;
-      const state = (crypto?.randomUUID?.() ?? `state_${Date.now()}`);
-      const redirectUri = `${location.origin}${location.pathname}`;
-      location.href = `${qqAuthBase}/qq/authorize?redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
+      if (this.qqBusy) return;
+      this.qqError = "";
+      ++qqSessionRequest;
+      try {
+        // Navigate synchronously: authorization must not wait for /session.
+        location.assign(getQqAuthorizeUrl(location.href, window.matchMedia("(max-width: 767px)").matches));
+      } catch (error) {
+        this.qqError = error.message;
+      }
     },
 
-    // 用授权回调的 code 换取用户信息（Mock 走本地 server；真实版由后端代理）
-    async handleQqCallback(code) {
-      if (!qqEnabled || !code) return false;
-
-      const tokenResp = await fetch(`${qqAuthBase}/qq/token`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
-      });
-      if (!tokenResp.ok) throw new Error("获取 QQ 授权令牌失败");
-
-      const { access_token: accessToken } = await tokenResp.json();
-      if (!accessToken) throw new Error("QQ 授权令牌为空");
-
-      const meResp = await fetch(`${qqAuthBase}/qq/me?access_token=${encodeURIComponent(accessToken)}`);
-      if (!meResp.ok) throw new Error("获取 QQ 用户信息失败");
-
-      const profile = await meResp.json();
-      this.qqUser = {
-        openid: profile.openid,
-        nickname: profile.nickname || "QQ 用户",
-        avatar: profile.figureurl || "",
-      };
-      localStorage.setItem(QQ_USER_STORAGE_KEY, JSON.stringify(this.qqUser));
-      return true;
-    },
-
-    qqLogout() {
-      this.qqUser = null;
-      localStorage.removeItem(QQ_USER_STORAGE_KEY);
+    async qqLogout() {
+      if (this.qqBusy) return;
+      this.qqBusy = true;
+      this.qqError = "";
+      ++qqSessionRequest;
+      try {
+        await qqRequest("/logout", { method: "POST" });
+        this.qqUser = null;
+      } catch (error) {
+        this.qqError = `退出未完成。${error.message}`;
+      } finally {
+        this.qqBusy = false;
+      }
     },
   },
 });
