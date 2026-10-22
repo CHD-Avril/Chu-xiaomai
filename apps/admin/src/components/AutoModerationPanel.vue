@@ -16,20 +16,26 @@ const store = useAdminStore();
 
 // 规则库：高风险直接建议锁定（reason 对应公告"歌单小规则"原文）
 const HIGH_RISK = [
-  { pattern: /\bDJ\b|DJ[·.・]|DJ版|DJ串烧/i, reason: "DJ类不播（公告规则3）" },
+  { pattern: /台独|港独|疆独|藏独|分裂国家|反动|政治敏感|台湾国|反华/i, reason: "政治敏感/分裂国家，绝对不播" },
+  { pattern: /涉政|政府|领导人|主席|总书记|共产党|民运|六四|天安门|法轮功/i, reason: "涉政内容，绝对不播" },
+  { pattern: /民族仇恨|宗教极端|恐怖主义|歧视.*民族|破坏团结|分裂.*民族/i, reason: "破坏民族团结/宗教极端，不播" },
+  { pattern: /伊斯兰|清真寺|诵经|阿訇|传教|基督徒|教堂|祷告/i, reason: "宗教内容，一般不播（特殊节目除外）" },
+  { pattern: /劣迹|封杀|涉毒|吸毒|嫖娼|偷税|范冰冰|吴亦凡|郑爽|张哲瀚|赵薇|高云翔|吴秀波|陈建州/i, reason: "劣迹/被封杀艺人，不播" },
+  { pattern: /fuck|shit|bitch|操你|妈的|傻逼|艹|尼玛|狗日|卖淫|赌博|毒品/i, reason: "违法/低俗内容，不播" },
+  { pattern: /DJ[·.・]|DJ版|DJ串烧|DJ/i, reason: "DJ类不播（公告规则3）" },
   { pattern: /喊麦|土嗨|电音|remix|串烧|慢摇|club/i, reason: "喊麦/土嗨/电音不播（公告规则3）" },
   { pattern: /洛天依|初音|VOCALOID|虚拟歌姬|虚拟歌手|V家|AI歌|赛博歌姬/i, reason: "虚拟歌姬不播（公告规则3）" },
   { pattern: /鬼畜|洗脑神曲|整活|恶搞|鬼叫|抖肩|咋了爸爸|江南Style|小苹果|最炫民族风|伤不起|忐忑/i, reason: "整活/鬼畜歌曲不播（公告规则3）" },
-  { pattern: /fuck|shit|bitch|操你|妈的|傻逼|艹|尼玛|狗日/i, reason: "内容不当/低俗（公告规则3）" },
   { pattern: /主播|直播|网红|带货|微商|拼多多/i, reason: "商业化/网红带货不播（公告规则3）" },
 ];
 
-// 中风险：建议人工复核
 const MEDIUM_RISK = [
-  { pattern: /\bMC\b|mc喊麦|另类/i, reason: "MC/另类曲风，建议人工复核" },
-  { pattern: /\(.*\)|【.*】/, reason: "歌名带括号注释，可能是二次创作或整活" },
-  { pattern: /[^\u4e00-\u9fa5a-zA-Z0-9\s·.,!?"'’‘\-]/, reason: "含特殊符号，可能是火星文或整活" },
-  { pattern: /(20\d{2}|19\d{2})/, reason: "歌名含年份，可能是整活歌曲" },
+  { pattern: /MC|mc喊麦|另类|民谣|摇滚|说唱|嘻哈|[Rr][Aa][Pp]/i, reason: "MC/说唱/另类曲风，建议人工复核是否合适校园广播" },
+  { pattern: /(民谣|民族|民歌).*(改编|翻唱|整活)/i, reason: "民族歌曲改编/整活，已和解的需人工判断是否可播" },
+  { pattern: /(.*)|【.*】/, reason: "歌名带括号注释，可能是二次创作或整活" },
+  { pattern: /[^一-龥a-zA-Z0-9s·.,!?"'’‘-]/, reason: "含特殊符号，可能是火星文或整活" },
+  { pattern: /(20d{2}|19d{2})/, reason: "歌名含年份，可能是整活歌曲" },
+  { pattern: /抑郁|自杀|想死|绝望|恨|仇恨|愤怒|骂|怼/i, reason: "可能带负面情绪，建议人工复核是否适合校园广播" },
 ];
 
 function evaluate(song) {
@@ -110,7 +116,7 @@ async function lockAllHigh() {
 
     <el-alert
       v-if="!flagged.length"
-      title="本期没有命中规则的歌曲，全部干净！"
+      title="本期没有不能播放原因的歌曲，全部干净！"
       type="success"
       :closable="false"
       show-icon
@@ -128,7 +134,7 @@ async function lockAllHigh() {
         <el-table-column prop="title" label="歌曲" min-width="180" />
         <el-table-column prop="artist" label="歌手" min-width="150" />
         <el-table-column prop="likesCount" label="喜欢" width="80" />
-        <el-table-column label="命中规则" width="180">
+        <el-table-column label="不能播放原因" width="180">
           <template #default="{ row }"><el-tag type="danger" size="small">{{ row.verdict.reason }}</el-tag></template>
         </el-table-column>
         <el-table-column label="操作" width="140">
@@ -143,7 +149,7 @@ async function lockAllHigh() {
         <el-table-column prop="title" label="歌曲" min-width="180" />
         <el-table-column prop="artist" label="歌手" min-width="150" />
         <el-table-column prop="likesCount" label="喜欢" width="80" />
-        <el-table-column label="命中规则" width="180">
+        <el-table-column label="不能播放原因" width="180">
           <template #default="{ row }"><el-tag type="warning" size="small">{{ row.verdict.reason }}</el-tag></template>
         </el-table-column>
         <el-table-column label="操作" width="140">
@@ -155,7 +161,7 @@ async function lockAllHigh() {
     </template>
 
     <div class="muted" style="margin-top:20px;font-size:12px;line-height:1.7">
-      <p><strong>规则说明：</strong>高风险命中 DJ/喊麦/土嗨/虚拟歌姬/鬼畜整活/低俗脏话等不播类型；中风险命中特殊符号、奇怪括号、年份等可疑特征。规则基于公告"歌单小规则"第 1-4 条。</p>
+      <p><strong>规则说明：</strong>高风险含政治敏感、民族宗教、劣迹艺人、违法低俗、DJ/喊麦/虚拟歌姬/鬼畜整活、网红带货等；中风险含MC/说唱/已和解民族改编/特殊符号/负面情绪等，人工复核。规则基于公告"歌单小规则"第 1-4 条。</p>
       <p>锁定操作会自动写入操作记录，原因标注"[自动审核]"，可在歌曲管理里查看。</p>
     </div>
   </el-card>
