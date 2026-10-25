@@ -13,6 +13,7 @@ const route = useRoute();
       <router-link to="/" :class="{ 'is-active': route.path === '/' }">首页</router-link>
       <router-link to="/playlist" :class="{ 'is-active': route.path === '/playlist' }">榜单</router-link>
       <router-link to="/history" :class="{ 'is-active': route.path === '/history' }">往期</router-link>
+      <router-link to="/me" :class="{ 'is-active': route.path === '/me' }">我的</router-link>
     </nav>
     <main id="top"><slot /></main>
     <AppFooter />

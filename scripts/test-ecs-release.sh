@@ -21,6 +21,10 @@ cat > "$fixture/bin/curl" <<'MOCK'
 set -euo pipefail
 if [[ "${FAIL_HEALTH:-false}" == true ]]; then exit 22; fi
 url="${!#}"
+if [[ "$url" == *'/qq/participation-health' ]]; then
+  if [[ "${FAIL_PARTICIPATION_HEALTH:-false}" == true ]]; then echo '{"ok":false}'; else echo '{"ok":true}'; fi
+  exit 0
+fi
 if [[ "$url" == *'/qq/health' ]]; then
   revision="$(cat "$CHU_DEPLOY_ROOT/current/qq-auth/REVISION")"
   if [[ "${FAIL_QQ_HEALTH:-false}" == true ]]; then revision=stale; fi
@@ -101,7 +105,15 @@ fi
 test "$(readlink "$CHU_DEPLOY_ROOT/current")" = "releases/$first"
 test "$(cat "$CHU_DEPLOY_ROOT/started-backend")" = "${first:0:40}"
 
+sixth=6666666666666666666666666666666666666666-6-1
+make_archive "$sixth"
+if FAIL_PARTICIPATION_HEALTH=true bash "$script_dir/ecs-release.sh" "$sixth"; then
+  echo 'Expected missing QQ participation configuration to reject the release' >&2; exit 1
+fi
+test "$(readlink "$CHU_DEPLOY_ROOT/current")" = "releases/$first"
+test "$(cat "$CHU_DEPLOY_ROOT/started-backend")" = "${first:0:40}"
+
 if bash "$script_dir/ecs-release.sh" '../invalid'; then
   echo 'Expected invalid release ID to be rejected' >&2; exit 1
 fi
-echo 'PASS: combined publish, HTTP/backend rollback, missing frontend/backend rejection, invalid ID rejection'
+echo 'PASS: combined publish, HTTP/backend/participation rollback, missing frontend/backend rejection, invalid ID rejection'

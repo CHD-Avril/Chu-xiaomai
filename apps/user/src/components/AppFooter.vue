@@ -23,7 +23,7 @@ const adminUrl = getAdminUrl();
       </a>
     </div>
     <div class="footer-actions">
-      <span>{{ periodStore.currentPeriod?.isTest ? '测试期仅限授权测试账号参与' : '投稿与投票无需登录' }}</span>
+      <span>{{ periodStore.currentPeriod?.isTest ? '测试期需 QQ 登录及测试账号授权' : '游客可浏览 · QQ 登录后投稿和投票' }}</span>
       <a class="text-link" aria-label="管理员入口" :href="adminUrl">管理入口 ↗</a>
     </div>
   </footer>

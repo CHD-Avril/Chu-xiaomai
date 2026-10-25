@@ -5,8 +5,10 @@ import { useDraftStore } from "../stores/draft";
 import { usePeriodStatus } from "../composables/usePeriodStatus";
 import { useRouter } from "vue-router";
 import ConnectionNotice from "./ConnectionNotice.vue";
+import { useAuthStore } from "../stores/auth";
 
 const songsStore = useSongsStore();
+const auth = useAuthStore();
 const { period, status: periodState } = usePeriodStatus();
 const router = useRouter();
 const draftStore = useDraftStore();
@@ -35,7 +37,7 @@ function viewSubmission() {
       <div>
         <h2>今天，你想听什么？</h2>
       </div>
-      <span class="no-login-note">{{ period?.isTest ? '测试账号已登录' : '无需登录' }}</span>
+      <span class="no-login-note">{{ auth.isQqLoggedIn ? 'QQ 已登录' : 'QQ 登录后可投稿' }}</span>
     </div>
 
     <div class="submission-period-card">
@@ -55,7 +57,7 @@ function viewSubmission() {
           type="text"
           maxlength="80"
           placeholder="例如：晴天"
-          :disabled="songsStore.isSubmitting"
+          :disabled="songsStore.isSubmitting || !auth.isQqLoggedIn || auth.qqBusy"
           required
         />
       </label>
@@ -66,12 +68,12 @@ function viewSubmission() {
           type="text"
           maxlength="80"
           placeholder="填写歌手或乐队名称"
-          :disabled="songsStore.isSubmitting"
+          :disabled="songsStore.isSubmitting || !auth.isQqLoggedIn || auth.qqBusy"
           required
         />
       </label>
       <button class="primary-button" type="submit" :disabled="songsStore.isSubmitting || !canMutate">
-        {{ songsStore.isSubmitting ? "正在投递…" : "提交这首歌 ↗" }}
+        {{ !auth.isQqLoggedIn ? "QQ 登录后可投稿" : songsStore.isSubmitting ? "正在投递…" : "提交这首歌 ↗" }}
       </button>
     </form>
     <p

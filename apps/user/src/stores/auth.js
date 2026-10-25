@@ -1,6 +1,5 @@
 import { defineStore } from "pinia";
 import { supabase, hasValidConfig } from "../services/supabase";
-import { getOrCreateVisitorId } from "../services/identity";
 import { isAdminEmailAllowed, isCurrentUserAdmin } from "../services/api";
 import { qqEnabled, QQ_USER_STORAGE_KEY, qqRequest, qqErrorMessages, getQqAuthorizeUrl } from "../services/qq";
 import { readRequest } from "../services/readRequest";
@@ -10,10 +9,8 @@ let qqSessionRequest = 0;
 
 export const useAuthStore = defineStore("auth", {
   state: () => ({
-    visitorId: "",
     backendReady: false,
     configError: false,
-    identityError: "",
     isAdmin: false,
     adminUser: null,
     qqUser: null,
@@ -84,22 +81,11 @@ export const useAuthStore = defineStore("auth", {
       }
     },
 
-    // 初始化访客身份（Cookie），标记后端可用
-    initIdentity() {
-      this.identityError = "";
-      this.visitorId = "";
+    // Browsing needs no writable browser identity; participation uses QQ sessions.
+    initBackend() {
       this.backendReady = hasValidConfig;
       this.configError = !hasValidConfig;
-      if (!hasValidConfig) {
-        return false;
-      }
-      try {
-        this.visitorId = getOrCreateVisitorId();
-        return true;
-      } catch {
-        this.identityError = "浏览器暂未允许本站 Cookie，仍可浏览歌单和公告。允许本站 Cookie 后，可重新尝试开启投稿和投票。";
-        return false;
-      }
+      return hasValidConfig;
     },
 
     async syncAdminSession(sessionOverride) {

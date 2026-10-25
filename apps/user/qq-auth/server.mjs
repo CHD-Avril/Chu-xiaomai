@@ -1,5 +1,6 @@
 import http from "node:http";
 import { randomBytes, timingSafeEqual } from "node:crypto";
+import { isIP } from "node:net";
 
 const FLOW_TTL = 10 * 60 * 1000;
 const SESSION_TTL = 7 * 24 * 60 * 60 * 1000;
@@ -27,13 +28,28 @@ export function readConfig(env = process.env) {
   const port = Number(env.QQ_AUTH_PORT || 3000);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("QQ_AUTH_PORT 无效。");
   const appId = (env.QQ_APP_ID || "").trim(), appKey = (env.QQ_APP_KEY || "").trim();
+  const databaseUrl = (env.SUPABASE_URL || "").trim();
+  const databaseKey = (env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  if (databaseUrl) {
+    const url = new URL(databaseUrl);
+    if (url.username || url.password || url.pathname !== "/" || url.search || url.hash ||
+      !(url.protocol === "https:" || (env.NODE_ENV !== "production" && url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname)))) {
+      throw new Error("SUPABASE_URL 必须是数据库服务的 HTTPS 源地址，本地开发可使用回环 HTTP 地址。");
+    }
+  }
+  if (databaseKey && !databaseKey.startsWith("sb_secret_")) {
+    let role;
+    try { role = JSON.parse(Buffer.from(databaseKey.split(".")[1], "base64url")).role; } catch { /* Reject public keys. */ }
+    if (role !== "service_role") throw new Error("QQ 投稿和投票后端需要 Supabase Secret key 或 service_role key，不能使用公开的 anon key。");
+  }
   if (appId && !/^\d+$/.test(appId)) throw new Error("QQ_APP_ID 必须是 QQ 互联分配的数字 AppID。");
   if (env.NODE_ENV === "production" && (mode !== "real" || !appId || !appKey || frontend.protocol !== "https:")) {
     throw new Error("生产 QQ 登录必须配置真实 AppID、AppKey 和 HTTPS 前端/回调地址，禁止使用模拟模式。");
   }
   return {
     mode, port, frontendOrigin: frontend.origin, redirectUri: callback.href,
-    appId, appKey, revision: env.QQ_AUTH_REVISION || "local",
+    appId, appKey, databaseUrl: databaseUrl ? new URL(databaseUrl).origin : "", databaseKey,
+    revision: env.QQ_AUTH_REVISION || "local",
     secure: frontend.protocol === "https:",
   };
 }
@@ -97,6 +113,47 @@ function safeAvatar(profile) {
   return "";
 }
 
+function participationError(code, status = 400) {
+  return Object.assign(new Error(code), { participationCode: code, status });
+}
+
+async function readJsonBody(req) {
+  if (!/^application\/json(?:\s*;|$)/i.test(req.headers["content-type"] || "")) throw participationError("invalid_request");
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > 8192) throw participationError("invalid_request", 413);
+    chunks.push(chunk);
+  }
+  let body;
+  try { body = JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { throw participationError("invalid_request"); }
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw participationError("invalid_request");
+  return body;
+}
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function participationParams(body) {
+  if (!["votes", "submit", "like", "dislike"].includes(body.operation) || !uuidPattern.test(body.periodId || "")) throw participationError("invalid_request");
+  const params = { p_operation: body.operation, p_period_id: body.periodId };
+  if (body.operation === "submit") {
+    for (const field of ["title", "artist"]) {
+      if (typeof body[field] !== "string" || !body[field].trim() || [...body[field].trim()].length > 80) throw participationError("invalid_request");
+      params[`p_${field}`] = body[field].trim();
+    }
+  } else if (["like", "dislike"].includes(body.operation)) {
+    if (!uuidPattern.test(body.songId || "") || !["on", "off"].includes(body.action)) throw participationError("invalid_request");
+    params.p_song_id = body.songId;
+    params.p_action = body.action;
+    if (body.operation === "dislike" && body.action === "on") {
+      if (typeof body.reason !== "string" || !body.reason.trim() || [...body.reason.trim()].length > 20) throw participationError("invalid_request");
+      params.p_reason = body.reason.trim();
+    }
+  }
+  // No client-provided OpenID, voter cookie, user ID or test-account ID is trusted.
+  return params;
+}
+
 export function createQqServer(config, { fetchImpl = fetch, now = Date.now } = {}) {
   const flows = new Map();
   const sessions = new Map();
@@ -139,6 +196,59 @@ export function createQqServer(config, { fetchImpl = fetch, now = Date.now } = {
     };
   }
 
+  async function participate(user, body, req) {
+    const params = participationParams(body);
+    // Mock QQ accounts must never write to the production database.
+    if (config.mode !== "real" || !config.databaseUrl || !config.databaseKey) throw participationError("participation_unavailable", 503);
+    const headers = { apikey: config.databaseKey, "Content-Type": "application/json" };
+    // New Secret keys are sent as apikey only; legacy service_role keys are JWTs.
+    if (!config.databaseKey.startsWith("sb_secret_")) headers.Authorization = `Bearer ${config.databaseKey}`;
+    let testUserId = null;
+    if (req.headers.authorization) {
+      if (!/^Bearer [A-Za-z0-9_.-]{20,4096}$/.test(req.headers.authorization)) throw participationError("test_login_required", 403);
+      const response = await fetchImpl(new URL("/auth/v1/user", config.databaseUrl), {
+        headers: { apikey: config.databaseKey, Authorization: req.headers.authorization },
+        signal: AbortSignal.timeout(10000), redirect: "error",
+      });
+      if (!response.ok) throw participationError("test_login_required", 403);
+      const account = await response.json();
+      if (!uuidPattern.test(account.id || "")) throw participationError("test_login_required", 403);
+      testUserId = account.id;
+    }
+    const response = await fetchImpl(new URL("/rest/v1/rpc/qq_participate", config.databaseUrl), {
+      method: "POST", headers, signal: AbortSignal.timeout(10000), redirect: "error",
+      body: JSON.stringify({ ...params, p_app_id: config.appId, p_openid: user.openid,
+        p_nickname: user.nickname, p_avatar: user.avatar, p_test_user_id: testUserId,
+        p_client_ip: ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress) && isIP(req.headers["x-real-ip"] || "")
+          ? req.headers["x-real-ip"] : null }),
+    });
+    // Never forward raw database errors or credentials to the browser.
+    if (!response.ok) throw participationError("participation_unavailable", 503);
+    const result = await response.json();
+    return result;
+  }
+
+  // A null period exits the database gateway before creating an account or
+  // recording any attempts. This checks server credentials and RPC permission.
+  let readiness;
+  async function participationReady() {
+    if (config.mode !== "real" || !config.databaseUrl || !config.databaseKey) return false;
+    if (!readiness || readiness.expiresAt <= now()) {
+      const headers = { apikey: config.databaseKey, "Content-Type": "application/json" };
+      if (!config.databaseKey.startsWith("sb_secret_")) headers.Authorization = `Bearer ${config.databaseKey}`;
+      readiness = { expiresAt: now() + 10000, result: (async () => {
+        try {
+          const response = await fetchImpl(new URL("/rest/v1/rpc/qq_participate", config.databaseUrl), {
+            method: "POST", headers, signal: AbortSignal.timeout(10000), redirect: "error",
+            body: JSON.stringify({ p_app_id: config.appId, p_openid: "_health_probe_", p_nickname: "", p_avatar: "", p_operation: "votes", p_period_id: null }),
+          });
+          return response.ok && (await response.json()).error === "period_unavailable";
+        } catch { return false; }
+      })() };
+    }
+    return readiness.result;
+  }
+
   const server = http.createServer(async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Referrer-Policy", "no-referrer");
@@ -156,6 +266,10 @@ export function createQqServer(config, { fetchImpl = fetch, now = Date.now } = {
       if (req.method === "GET" && url.pathname === "/qq/health") {
         return json(res, configured ? 200 : 503, { ok: configured, mode: config.mode, configured, revision: config.revision });
       }
+      if (req.method === "GET" && url.pathname === "/qq/participation-health") {
+        const ok = await participationReady();
+        return json(res, ok ? 200 : 503, { ok });
+      }
       if (req.method === "GET" && url.pathname === "/qq/session") {
         const session = sessions.get(requestCookies[SESSION_COOKIE]);
         if (!session && requestCookies[SESSION_COOKIE]) res.setHeader("Set-Cookie", setCookie(SESSION_COOKIE, "", 0));
@@ -167,6 +281,21 @@ export function createQqServer(config, { fetchImpl = fetch, now = Date.now } = {
         flows.delete(requestCookies[STATE_COOKIE]);
         res.setHeader("Set-Cookie", [setCookie(SESSION_COOKIE, "", 0), setCookie(STATE_COOKIE, "", 0)]);
         return json(res, 200, { ok: true });
+      }
+      if (req.method === "POST" && url.pathname === "/qq/participate") {
+        if (req.headers.origin !== config.frontendOrigin) return json(res, 403, { error: "invalid_origin" });
+        const session = sessions.get(requestCookies[SESSION_COOKIE]);
+        if (!session) {
+          res.setHeader("Set-Cookie", setCookie(SESSION_COOKIE, "", 0));
+          return json(res, 401, { error: "qq_login_required" });
+        }
+        try {
+          const body = await readJsonBody(req);
+          const result = await participate(session.user, body, req);
+          return json(res, 200, result);
+        } catch (error) {
+          return json(res, error.status || 503, { error: error.participationCode || "participation_unavailable" });
+        }
       }
       if (req.method === "GET" && url.pathname === "/qq/authorize") {
         let returnTo;
