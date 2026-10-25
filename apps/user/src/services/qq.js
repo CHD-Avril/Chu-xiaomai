@@ -15,6 +15,10 @@ export const qqErrorMessages = {
   invalid_request: "提交内容无效，请检查后重试。",
   invalid_origin: "请求校验失败，请从本站页面重试。",
   rate_limited: "操作过于频繁，请稍后再试。",
+  account_banned: "该站内账号当前已被封禁，暂不能投稿或投票。请到个人中心查看处理原因和到期时间。",
+  voting_restricted: "该账号的投票权限暂受限制，请到个人中心查看详情。",
+  submission_restricted: "该账号的投稿权限暂受限制，请到个人中心查看详情。",
+  notice_not_found: "通知不存在或不属于当前账号，请刷新个人中心。",
 };
 
 export function getQqAuthorizeUrl(returnTo, mobile = false) {

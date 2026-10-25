@@ -32,7 +32,7 @@
 
 第 3–5 步之间旧前端会暂时不能参与，浏览功能可用。发布回滚不会回滚数据库权限；维护完成前保持只读，不要为了回滚而重开匿名写入。仅发布页面或仅配置密钥都不能完整启用本功能。后续重新运行旧迁移会恢复旧函数权限，因此必须最后重新执行 `supabase-qq-participation.sql`；生成的全量重建脚本已包含最新 QQ 权限，并保留 `qq_accounts` 身份记录。
 
-数据库迁移由运营人员单独执行；代码通过 GitHub Actions 同步发布前后端。发布会检查 `/qq/participation-health`，用空征集期调用确认后端 Supabase 密钥和专用 RPC 权限，不创建用户、不写入投票。检查失败会恢复原代码版本。
+数据库迁移由运营人员单独执行；账号处理还需最后执行 `supabase-account-moderation.sql`，详见 [账号处理与通知](ACCOUNT_MODERATION.md)。代码通过 GitHub Actions 同步发布前后端。发布检查 `/qq/participation-health`，用空征集期调用确认后端 Supabase 密钥和专用 RPC 权限，再检查账号限制是否接入网关；不创建用户、不写入投票或处理记录。检查失败会恢复原代码版本。
 
 ## 本地试用
 

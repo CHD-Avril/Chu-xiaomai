@@ -38,3 +38,23 @@ test("participation settings API reads actual values, updates only quotas, preve
     await assert.rejects(api.saveParticipationLimits({submissions:4,likes:5},{submissions:3,likes:5}),error=>error.code==="42501");
   } finally {globalThis.fetch=originalFetch;await server?.close();}
 });
+
+test("account moderation API sends explicit target, reason and expected version without trusting client actor fields", async () => {
+  const originalFetch=globalThis.fetch;
+  const calls=[];let server;
+  globalThis.fetch=async(input,options={})=>{
+    const url=new URL(String(input));const body=JSON.parse(options.body);calls.push({name:url.pathname.split('/').at(-1),body});
+    if(url.pathname.endsWith('/admin_list_qq_accounts'))return Response.json({items:[],total:0});
+    if(url.pathname.endsWith('/admin_get_account_moderation'))return Response.json({account:{id:body.p_account_id},moderation:{version:3},actions:[]});
+    assert(url.pathname.endsWith('/admin_moderate_account'));
+    return new Response(null,{status:204});
+  };
+  try {
+    server=await createServer({root:fileURLToPath(new URL('..',import.meta.url)),server:{middlewareMode:true,hmr:{server:createHttpServer()}},appType:'custom'});
+    const api=await server.ssrLoadModule('/src/services/api.js');
+    await api.fetchQqAccounts(' 同学 ',2);assert.deepEqual(calls.at(-1).body,{p_search:'同学',p_offset:20,p_limit:20});
+    const id='11111111-1111-4111-8111-111111111111';await api.fetchAccountModeration(id);assert.equal(calls.at(-1).body.p_account_id,id);
+    await api.moderateAccount({accountId:id,action:'ban',reason:'  违规刷票  ',durationHours:24,expectedVersion:3,actorId:'forged'});
+    assert.deepEqual(calls.at(-1).body,{p_account_id:id,p_action:'ban',p_reason:'违规刷票',p_duration_hours:24,p_expected_version:3});
+  } finally {globalThis.fetch=originalFetch;await server?.close();}
+});

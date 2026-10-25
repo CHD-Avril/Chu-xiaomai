@@ -14,7 +14,7 @@ const router = useRouter();
 const draftStore = useDraftStore();
 const draft = draftStore.draft;
 
-const canMutate = computed(() => songsStore.canMutate);
+const canMutate = computed(() => songsStore.canSubmit);
 
 async function handleSubmit() {
   const ok = await songsStore.submitSong(draft.title, draft.artist);

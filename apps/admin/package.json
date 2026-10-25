@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test tests/moderation-export.cjs tests/participation-rules.test.mjs",
-    "test:db": "node tests/database-workflow.cjs && node tests/database-integrity.cjs && node tests/database-test-mode.cjs && node tests/database-qq-participation.cjs && node tests/database-participation-limits.cjs && node tests/database-reset.cjs"
+    "test:db": "node tests/database-workflow.cjs && node tests/database-integrity.cjs && node tests/database-test-mode.cjs && node tests/database-qq-participation.cjs && node tests/database-participation-limits.cjs && node tests/database-account-moderation.cjs && node tests/database-reset.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

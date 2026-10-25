@@ -134,6 +134,11 @@ async function readJsonBody(req) {
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function participationParams(body) {
+  if (body.operation === "account") return { p_operation: "account" };
+  if (body.operation === "read_notice") {
+    if (body.noticeId != null && !uuidPattern.test(body.noticeId)) throw participationError("invalid_request");
+    return { p_operation: "read_notice", p_notice_id: body.noticeId || null };
+  }
   if (!["votes", "submit", "like", "dislike"].includes(body.operation) || !uuidPattern.test(body.periodId || "")) throw participationError("invalid_request");
   const params = { p_operation: body.operation, p_period_id: body.periodId };
   if (body.operation === "submit") {
@@ -203,6 +208,16 @@ export function createQqServer(config, { fetchImpl = fetch, now = Date.now } = {
     const headers = { apikey: config.databaseKey, "Content-Type": "application/json" };
     // New Secret keys are sent as apikey only; legacy service_role keys are JWTs.
     if (!config.databaseKey.startsWith("sb_secret_")) headers.Authorization = `Bearer ${config.databaseKey}`;
+    if (["account", "read_notice"].includes(body.operation)) {
+      const isAccount = body.operation === "account";
+      const response = await fetchImpl(new URL(`/rest/v1/rpc/${isAccount ? "qq_account_status" : "qq_read_account_notice"}`, config.databaseUrl), {
+        method: "POST", headers, signal: AbortSignal.timeout(10000), redirect: "error",
+        body: JSON.stringify({ p_app_id: config.appId, p_openid: user.openid,
+          ...(isAccount ? { p_nickname: user.nickname, p_avatar: user.avatar } : { p_notice_id: params.p_notice_id }) }),
+      });
+      if (!response.ok) throw participationError("participation_unavailable", 503);
+      return response.json();
+    }
     let testUserId = null;
     if (req.headers.authorization) {
       if (!/^Bearer [A-Za-z0-9_.-]{20,4096}$/.test(req.headers.authorization)) throw participationError("test_login_required", 403);
@@ -242,7 +257,11 @@ export function createQqServer(config, { fetchImpl = fetch, now = Date.now } = {
             method: "POST", headers, signal: AbortSignal.timeout(10000), redirect: "error",
             body: JSON.stringify({ p_app_id: config.appId, p_openid: "_health_probe_", p_nickname: "", p_avatar: "", p_operation: "votes", p_period_id: null }),
           });
-          return response.ok && (await response.json()).error === "period_unavailable";
+          if (!response.ok || (await response.json()).error !== "period_unavailable") return false;
+          const moderation = await fetchImpl(new URL("/rest/v1/rpc/qq_moderation_health", config.databaseUrl), {
+            method: "POST", headers, signal: AbortSignal.timeout(10000), redirect: "error", body: "{}",
+          });
+          return moderation.ok && (await moderation.json()).ok === true;
         } catch { return false; }
       })() };
     }
