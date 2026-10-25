@@ -45,7 +45,7 @@ async function toggleMode() {
   try {
     await ElMessageBox.confirm(enabled
       ? `将「${period.title}」设为测试期？开启后仅授权测试账号可查看歌单、投稿和投票。本期现有歌曲和票数保留。`
-      : `关闭「${period.title}」的测试模式？本期所有歌曲（包括测试投稿）将公开展示；在征集时间内，访客恢复免登录投稿和投票。`, enabled ? "开启测试模式" : "恢复正式征集", {
+      : `关闭「${period.title}」的测试模式？本期所有歌曲（包括测试投稿）将公开展示；在征集时间内，QQ 登录用户可以投稿和投票。`, enabled ? "开启测试模式" : "恢复正式征集", {
       confirmButtonText: enabled ? "开启测试模式" : "确认公开本期内容", cancelButtonText: "取消", type: "warning",
     });
   } catch { return; }
