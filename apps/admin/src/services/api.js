@@ -16,6 +16,42 @@ export async function isCurrentUserAdmin() {
   return data === true;
 }
 
+// ---------- 参与规则（数据库按每个账号、每期强制执行） ----------
+
+const participationColumns = "submission_cookie_per_period,max_likes_per_period";
+export const MAX_PARTICIPATION_LIMIT = 2147483647;
+
+export function participationLimitsError(limits) {
+  return [limits?.submissions, limits?.likes].every(value => Number.isInteger(value) && value >= 1 && value <= MAX_PARTICIPATION_LIMIT)
+    ? "" : "投稿上限和喜欢上限都须填写大于 0 的整数。";
+}
+
+function normalizeParticipationLimits(row) {
+  const limits = { submissions: row?.submission_cookie_per_period, likes: row?.max_likes_per_period };
+  if (participationLimitsError(limits)) throw new Error("参与规则尚未配置完整，请联系管理员检查数据库。");
+  return limits;
+}
+
+export async function fetchParticipationLimits() {
+  const { data, error } = await supabase.from("security_settings").select(participationColumns).eq("id", true).single();
+  if (error) throw error;
+  return normalizeParticipationLimits(data);
+}
+
+export async function saveParticipationLimits(limits, expected) {
+  const message = participationLimitsError(limits) || participationLimitsError(expected);
+  if (message) throw new Error(message);
+  // RLS permits only administrators. Compare both previous values so a second
+  // operator cannot silently overwrite a change made since opening this form.
+  const { data, error } = await supabase.from("security_settings")
+    .update({ submission_cookie_per_period: limits.submissions, max_likes_per_period: limits.likes, updated_at: new Date().toISOString() })
+    .eq("id", true).eq("submission_cookie_per_period", expected.submissions).eq("max_likes_per_period", expected.likes)
+    .select(participationColumns).maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("规则已被其他管理员修改，或当前账号没有修改权限。请重新读取后再保存。");
+  return normalizeParticipationLimits(data);
+}
+
 // ---------- 征集期 ----------
 
 export async function fetchAllPeriods() {
