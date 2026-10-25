@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useSongsStore } from "../stores/songs";
 import { usePeriodStatus } from "../composables/usePeriodStatus";
 import { useAuthStore } from "../stores/auth";
@@ -22,9 +22,11 @@ const reasonInput = ref(null);
 const isLiked = computed(() => songsStore.likedSongIds.has(props.song.id));
 const isDisliked = computed(() => songsStore.dislikedSongIds.has(props.song.id));
 const canMutate = computed(() => songsStore.canMutate);
+watch(canMutate, (allowed) => { if (!allowed) { showReason.value = false; reason.value = ""; } });
 const disabledReason = computed(() => {
+  if (!auth.isQqLoggedIn) return "游客模式仅可浏览，请先 QQ 登录再投票。";
   if (props.song.isLocked) return "这首歌正在审核，暂时无法投票。";
-  if (auth.identityError) return auth.identityError;
+  if (songsStore.personalVotesAccount !== auth.qqUser.openid) return "正在确认你的投票记录；读取失败时请刷新榜单。";
   if (!canMutate.value) return status.value.copy;
   if (songsStore.likingSongId || songsStore.dislikingSongId) return "正在保存投票，请稍候。";
   return "";
@@ -35,6 +37,7 @@ async function onLike() {
 }
 
 async function onDislike() {
+  if (!canMutate.value || props.song.isLocked) return;
   if (isDisliked.value) {
     await songsStore.toggleDislikeSong(props.song, "");
     return;

@@ -56,7 +56,7 @@ async function changePage(page) {
     </div>
     <details class="voting-guide">
       <summary>投票说明<span v-if="songsStore.lastUpdatedAt"> · {{ formatDateTime(songsStore.lastUpdatedAt) }} 更新</span></summary>
-      <p>{{ period?.isTest ? '测试期仅限授权测试账号参与。' : '无需登录即可投票。' }}喜欢与点踩互斥，再次点击可取消；点踩需填写理由，已提交的举报不会随取消点踩撤回。点击歌名可展开完整信息。</p>
+      <p>QQ 登录后可投票，游客仅可浏览。{{ period?.isTest ? '测试期还需登录已授权的测试账号。' : '' }}喜欢与点踩互斥，再次点击可取消；点踩需填写理由，已提交的举报不会随取消点踩撤回。点击歌名可展开完整信息。</p>
     </details>
     <div class="controls">
       <label class="field search-field">

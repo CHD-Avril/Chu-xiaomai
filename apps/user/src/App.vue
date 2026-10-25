@@ -37,6 +37,10 @@ const onOnline = () => refreshVisibleData(0);
 watch(() => route.path, (path) => {
   if (path === "/" || path === "/playlist") refreshVisibleData(0);
 });
+watch(() => authStore.qqUser?.openid, () => {
+  songsStore.clearPersonalState();
+  if (ready) songsStore.refresh({ background: true });
+});
 onBeforeUnmount(() => {
   disposed = true;
   clearInterval(clock);
@@ -49,12 +53,12 @@ onBeforeUnmount(() => {
 });
 
 onMounted(async () => {
-  authStore.initIdentity();
+  authStore.initBackend();
   clock = setInterval(() => { periodStore.now = Date.now(); }, 1000);
 
   // OAuth codes are consumed by the backend; only a verified session reaches Vue.
   authStore.readQqCallbackError();
-  authStore.restoreQqUser();
+  const qqSession = authStore.restoreQqUser();
   // Test login is verified by refresh() after reading the period. Public loading
   // must not wait on an unrelated tester permission request.
   if (disposed) return;
@@ -81,6 +85,9 @@ onMounted(async () => {
   ]);
   if (disposed) return;
   ready = true;
+  // Login restoration runs independently of the public song read. If it settles
+  // during that read, sync personal votes once the initial refresh has finished.
+  qqSession.then(() => { if (!disposed && authStore.isQqLoggedIn) songsStore.refresh({ background: true }); });
   window.addEventListener("focus", onFocus);
   window.addEventListener("online", onOnline);
   document.addEventListener("visibilitychange", onFocus);
@@ -90,9 +97,9 @@ onMounted(async () => {
 
 <template>
   <AppLayout>
-    <IdentityNotice />
-    <TestModeAccess v-if="periodStore.currentPeriod?.isTest" />
-    <router-view v-if="!testLocked || route.path === '/history'" :key="authStore.isTester ? authStore.testUser?.id : 'visitor'" />
+    <IdentityNotice v-if="route.path !== '/me'" />
+    <TestModeAccess v-if="periodStore.currentPeriod?.isTest && route.path !== '/me'" />
+    <router-view v-if="!testLocked || route.path === '/history' || route.path === '/me'" :key="authStore.isTester ? authStore.testUser?.id : 'visitor'" />
   </AppLayout>
 
   <AnnouncementModal />

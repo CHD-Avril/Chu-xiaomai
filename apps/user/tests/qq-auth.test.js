@@ -12,9 +12,11 @@ async function setup(t, { env = {}, fetchImpl, now } = {}) {
   await once(server, "listening");
   t.after(() => new Promise((resolve) => { server.close(resolve); server.closeAllConnections(); }));
   const jar = new Map();
-  const request = async (path, { method = "GET", cookies = jar, origin, host = new URL(config.frontendOrigin).host } = {}) => {
+  const request = async (path, { method = "GET", cookies = jar, origin, host = new URL(config.frontendOrigin).host, body, extraHeaders = {} } = {}) => {
     const headers = { host, cookie: [...cookies].map(([key, value]) => `${key}=${value}`).join(";") };
     if (origin !== undefined) headers.origin = origin;
+    Object.assign(headers, extraHeaders);
+    if (body !== undefined) headers["content-type"] = "application/json";
     const url = new URL(path, config.frontendOrigin);
     // node:http preserves the explicit Host header for the same-origin proxy test.
     const response = await new Promise((resolve, reject) => {
@@ -29,7 +31,7 @@ async function setup(t, { env = {}, fetchImpl, now } = {}) {
         incoming.on("error", reject);
       });
       outgoing.on("error", reject);
-      outgoing.end();
+      outgoing.end(body === undefined ? undefined : JSON.stringify(body));
     });
     for (const cookie of response.headers.getSetCookie()) {
       const [name, value] = cookie.split(";")[0].split("=");
@@ -54,6 +56,110 @@ test("config defaults to real, enforces same-site callback, parses QQ formats wi
   assert.deepEqual(parseQqResponse('{"ret":0}'), { ret: 0 });
   assert.deepEqual(parseQqResponse("access_token=secret&expires_in=60"), { access_token: "secret", expires_in: "60" });
   assert.throws(() => parseQqResponse('callback({});process.exit()'));
+});
+
+test("participation requires a verified QQ session, binds identity on server and rejects expired/logout/forged requests", async (t) => {
+  let timestamp = 1000000;
+  const databaseCalls = [];
+  let databaseFailure = false;
+  const secret = "sb_secret_test_backend_only";
+  const { request, authorize, config } = await setup(t, {
+    now: () => timestamp,
+    env: { QQ_APP_ID: "1905775107", QQ_APP_KEY: "qq-test-private", SUPABASE_URL: "https://database.example", SUPABASE_SECRET_KEY: secret },
+    fetchImpl: async (url, options) => {
+      if (url.host === "graph.qq.com") {
+        if (url.pathname.endsWith("/token")) return Response.json({ access_token: "provider-private", expires_in: 60 });
+        if (url.pathname.endsWith("/me")) return Response.json({ client_id: "1905775107", openid: "VERIFIED_QQ_A" });
+        return Response.json({ ret: 0, nickname: "QQ同学" });
+      }
+      assert.equal(url.origin, "https://database.example");
+      assert.equal(options.headers.apikey, secret);
+      if (url.pathname === "/auth/v1/user") {
+        if (options.headers.Authorization === "Bearer valid-tester-token-123456789") return Response.json({ id: "22222222-2222-4222-8222-222222222222" });
+        return Response.json({ message: "Invalid JWT" }, { status: 401 });
+      }
+      assert.equal(url.pathname, "/rest/v1/rpc/qq_participate");
+      assert.equal(options.headers.Authorization, undefined, "Secret keys are not bearer JWTs");
+      const body = JSON.parse(options.body);
+      databaseCalls.push(body);
+      if (databaseFailure) return Response.json({ message: `sensitive:${secret}` }, { status: 403 });
+      return Response.json({ likes: [], dislikes: [] });
+    },
+  });
+  const periodId = "11111111-1111-4111-8111-111111111111";
+  const body = { operation: "votes", periodId, openid: "FORGED_QQ", voterCookie: "forged", p_test_user_id: periodId, clientIp: "203.0.113.66" };
+  const post = (overrides = {}) => request("/qq/participate", { method: "POST", origin: config.frontendOrigin, body, ...overrides });
+  assert.equal((await post()).status, 401);
+  assert.equal((await post({ cookies: new Map([["chu_qq_session", "forged"]]) })).status, 401);
+  assert.equal(databaseCalls.length, 0);
+  const login = async () => {
+    const target = await authorize();
+    await request(`/qq/callback?state=${target.searchParams.get("state")}&code=test-code`);
+  };
+  await login();
+  assert.equal((await post({ origin: "https://evil.example" })).status, 403);
+  assert.equal((await post({ origin: undefined })).status, 403);
+  assert.equal((await post({ body: { ...body, operation: "anything" } })).status, 400);
+  assert.equal((await post({ body: { ...body, periodId: "invalid" } })).status, 400);
+  assert.equal(databaseCalls.length, 0);
+  assert.equal((await post()).status, 200);
+  assert.equal(databaseCalls[0].p_openid, "VERIFIED_QQ_A");
+  assert.equal(databaseCalls[0].p_app_id, "1905775107");
+  assert.equal(databaseCalls[0].p_test_user_id, null);
+  assert.equal(databaseCalls[0].p_client_ip, null, "Browser JSON must not set the trusted peer IP");
+  assert.equal((await post({ extraHeaders: { "x-real-ip": "192.0.2.5", authorization: "Bearer valid-tester-token-123456789" } })).status, 200);
+  assert.equal(databaseCalls.at(-1).p_test_user_id, "22222222-2222-4222-8222-222222222222");
+  assert.equal(databaseCalls.at(-1).p_client_ip, "192.0.2.5");
+  assert.equal((await post({ extraHeaders: { authorization: "Bearer expired-tester-token-123456789" } })).status, 403);
+  databaseFailure = true;
+  const failure = await post();
+  assert.equal(failure.status, 503);
+  assert.deepEqual(await failure.json(), { error: "participation_unavailable" });
+  timestamp += 61000;
+  assert.equal((await post()).status, 401);
+  await login();
+  await request("/qq/logout", { method: "POST", origin: config.frontendOrigin });
+  assert.equal((await post()).status, 401);
+});
+
+test("participation never uses public database keys or allows Mock QQ to reach a database", async (t) => {
+  const anonKey = `unused.${Buffer.from(JSON.stringify({ role: "anon" })).toString("base64url")}.unused`;
+  assert.throws(() => readConfig({ SUPABASE_SECRET_KEY: anonKey }), /anon key/);
+  assert.throws(() => readConfig({ NODE_ENV: "production", SUPABASE_URL: "http://database.example" }), /HTTPS/);
+  const legacyKey = `unused.${Buffer.from(JSON.stringify({ role: "service_role" })).toString("base64url")}.unused`;
+  assert.equal(readConfig({ SUPABASE_SERVICE_ROLE_KEY: legacyKey }).databaseKey, legacyKey);
+  const { request, authorize, config } = await setup(t, {
+    env: { QQ_AUTH_MODE: "mock", SUPABASE_URL: "https://database.example", SUPABASE_SECRET_KEY: "sb_secret_never_used" },
+    fetchImpl: async () => { throw new Error("Mock must never make a database call"); },
+  });
+  const target = await authorize();
+  const confirm = await request(`/qq/mock/confirm?state=${target.searchParams.get("state")}&account=0`);
+  await request(confirm.headers.get("location"));
+  const response = await request("/qq/participate", { method: "POST", origin: config.frontendOrigin,
+    body: { operation: "votes", periodId: "11111111-1111-4111-8111-111111111111" } });
+  assert.equal(response.status, 503);
+});
+
+test("participation readiness checks server credentials with a non-writing null-period probe and hides upstream failures", async (t) => {
+  let calls = 0;
+  const { request } = await setup(t, { env: { QQ_APP_ID: "1905775107", QQ_APP_KEY: "qq-test", SUPABASE_URL: "https://database.example", SUPABASE_SECRET_KEY: "sb_secret_health_only" },
+    fetchImpl: async (url, options) => {
+      calls++;
+      assert.equal(url.pathname, "/rest/v1/rpc/qq_participate");
+      assert.equal(JSON.parse(options.body).p_period_id, null);
+      assert.equal(JSON.parse(options.body).p_operation, "votes");
+      return Response.json({ error: "period_unavailable" });
+    } });
+  assert.equal((await request("/qq/participation-health")).status, 200);
+  assert.deepEqual(await (await request("/qq/participation-health")).json(), { ok: true });
+  assert.equal(calls, 1, "Cache probes briefly to avoid repeated provider requests");
+  const unavailable = await setup(t);
+  assert.equal((await unavailable.request("/qq/participation-health")).status, 503);
+  const failed = await setup(t, { env: { QQ_APP_ID: "1905775107", QQ_APP_KEY: "qq-test", SUPABASE_URL: "https://database.example", SUPABASE_SECRET_KEY: "sb_secret_health_only" },
+    fetchImpl: async () => Response.json({message:"sensitive-details"},{status:401}) });
+  const response = await failed.request("/qq/participation-health");
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {ok:false});
 });
 
 test("production refuses missing credentials, HTTP, invalid AppID and Mock", () => {

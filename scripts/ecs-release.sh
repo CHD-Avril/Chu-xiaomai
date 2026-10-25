@@ -82,6 +82,12 @@ for attempt in {1..20}; do
 done
 [[ "$auth_ready" == true ]] || { echo 'QQ backend health/revision check failed' >&2; false; }
 
+# Credentials must be installed on ECS, and the non-destructive QQ migration
+# must be applied. A null-period probe performs no account/vote writes.
+curl "${curl_options[@]}" "https://$domain/qq/participation-health" | node -e '
+  let text=""; process.stdin.on("data", chunk => text += chunk);
+  process.stdin.on("end", () => { try { process.exit(JSON.parse(text).ok === true ? 0 : 1); } catch { process.exit(1); } });'
+
 trap - ERR
 rm -f -- "$archive" "$web_root/incoming/$release_id.sh"
 echo "Published $release_id (previous: $previous)"

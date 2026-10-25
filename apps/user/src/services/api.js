@@ -4,6 +4,7 @@ import { supabase } from "./supabase";
 import { normalizeText } from "../utils/format";
 import { readPeriodRows } from "../../../shared/periods";
 import { readRequest } from "./readRequest";
+import { qqRequest } from "./qq";
 
 // ---------- 用户端 ----------
 
@@ -24,55 +25,32 @@ export async function fetchSongs(periodId) {
   return mapSongs(data);
 }
 
-export async function fetchMyLikes(periodId, voterCookie) {
-  const data = await readRequest("读取个人喜欢记录", (signal) => supabase.rpc("get_my_likes", {
-    p_playlist_date: periodId,
-    p_voter_cookie: voterCookie,
-  }).abortSignal(signal));
-  return (data ?? []).map((row) => typeof row === "string" ? row : row.song_id).filter(Boolean);
-}
-
-export async function fetchMyDislikes(periodId, voterCookie) {
-  const data = await readRequest("读取个人点踩记录", (signal) => supabase.rpc("get_my_dislikes", {
-    p_playlist_date: periodId,
-    p_voter_cookie: voterCookie,
-  }).abortSignal(signal));
-  return (data ?? []).map((row) => typeof row === "string" ? row : row.song_id).filter(Boolean);
-}
-
-export async function submitSong({ title, artist, playlistDate, voterCookie }) {
-  const { data, error } = await supabase.rpc("submit_song", {
-    p_title: title,
-    p_artist: artist,
-    p_playlist_date: playlistDate,
-    p_voter_cookie: voterCookie,
-  });
-  if (error) throw error;
+async function participate(operation, values, isTest) {
+  const headers = { "Content-Type": "application/json" };
+  if (isTest) {
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data.session?.access_token) throw new Error("请先登录已授权的测试账号。");
+    headers.Authorization = `Bearer ${data.session.access_token}`;
+  }
+  const data = await qqRequest("/participate", { method: "POST", headers, body: JSON.stringify({ operation, ...values }) });
   assertMutationResult(data);
-  return data?.[0] ?? null;
+  return data;
 }
 
-export async function toggleLike({ songId, playlistDate, voterCookie, action }) {
-  const { data, error } = await supabase.rpc("toggle_song_like", {
-    p_song_id: songId,
-    p_playlist_date: playlistDate,
-    p_voter_cookie: voterCookie,
-    p_action: action === "on" ? "like" : "unlike",
-  });
-  if (error) throw error;
-  assertMutationResult(data);
+export async function fetchMyVotes(periodId, isTest = false) {
+  return readRequest("读取个人投票记录", async () => ({ data: await participate("votes", { periodId }, isTest) }));
 }
 
-export async function toggleDislike({ songId, playlistDate, voterCookie, action, reason = null }) {
-  const { data, error } = await supabase.rpc("toggle_song_dislike", {
-    p_song_id: songId,
-    p_playlist_date: playlistDate,
-    p_voter_cookie: voterCookie,
-    p_action: action === "on" ? "dislike" : "undislike",
-    p_reason: reason,
-  });
-  if (error) throw error;
-  assertMutationResult(data);
+export async function submitSong({ title, artist, playlistDate, isTest }) {
+  return participate("submit", { title, artist, periodId: playlistDate }, isTest);
+}
+
+export async function toggleLike({ songId, playlistDate, isTest, action }) {
+  return participate("like", { songId, periodId: playlistDate, action }, isTest);
+}
+
+export async function toggleDislike({ songId, playlistDate, isTest, action, reason = null }) {
+  return participate("dislike", { songId, periodId: playlistDate, action, reason }, isTest);
 }
 
 // Business rejection is returned as data so the database can commit its request counter.

@@ -18,6 +18,7 @@ const isActive = (path) => route.path === path;
       <router-link to="/" :class="{ 'is-active': isActive('/') }">首页</router-link>
       <router-link to="/playlist" :class="{ 'is-active': isActive('/playlist') }">榜单</router-link>
       <router-link to="/history" :class="{ 'is-active': isActive('/history') }">往期</router-link>
+      <router-link to="/me" :class="{ 'is-active': isActive('/me') }">我的</router-link>
     </nav>
 
     <main id="top">
