@@ -78,6 +78,14 @@ test("participation requires a verified QQ session, binds identity on server and
         if (options.headers.Authorization === "Bearer valid-tester-token-123456789") return Response.json({ id: "22222222-2222-4222-8222-222222222222" });
         return Response.json({ message: "Invalid JWT" }, { status: 401 });
       }
+      if (["/rest/v1/rpc/qq_account_status", "/rest/v1/rpc/qq_read_account_notice"].includes(url.pathname)) {
+        const payload = JSON.parse(options.body);
+        assert.equal(payload.p_openid, "VERIFIED_QQ_A");
+        assert.equal(payload.p_app_id, "1905775107");
+        assert.equal(payload.p_account_id, undefined);
+        if (url.pathname.endsWith("qq_read_account_notice")) return Response.json({ok:true});
+        return Response.json({id:"11111111-1111-4111-8111-111111111111",moderation:{banned:false},notices:[],unread_count:0});
+      }
       assert.equal(url.pathname, "/rest/v1/rpc/qq_participate");
       assert.equal(options.headers.Authorization, undefined, "Secret keys are not bearer JWTs");
       const body = JSON.parse(options.body);
@@ -100,8 +108,14 @@ test("participation requires a verified QQ session, binds identity on server and
   assert.equal((await post({ origin: "https://evil.example" })).status, 403);
   assert.equal((await post({ origin: undefined })).status, 403);
   assert.equal((await post({ body: { ...body, operation: "anything" } })).status, 400);
+  assert.equal((await post({ body: { operation: "ban", accountId: periodId, reason: "forged" } })).status, 400);
   assert.equal((await post({ body: { ...body, periodId: "invalid" } })).status, 400);
   assert.equal(databaseCalls.length, 0);
+  const account = await post({body:{operation:"account",openid:"QQ_VICTIM",accountId:periodId}});
+  assert.equal(account.status,200);
+  assert.equal((await account.json()).unread_count,0);
+  assert.equal((await post({body:{operation:"read_notice",noticeId:periodId,openid:"QQ_VICTIM"}})).status,200);
+  assert.equal((await post({body:{operation:"read_notice",noticeId:"invalid"}})).status,400);
   assert.equal((await post()).status, 200);
   assert.equal(databaseCalls[0].p_openid, "VERIFIED_QQ_A");
   assert.equal(databaseCalls[0].p_app_id, "1905775107");
@@ -117,6 +131,7 @@ test("participation requires a verified QQ session, binds identity on server and
   assert.deepEqual(await failure.json(), { error: "participation_unavailable" });
   timestamp += 61000;
   assert.equal((await post()).status, 401);
+  assert.equal((await post({body:{operation:"account"}})).status,401);
   await login();
   await request("/qq/logout", { method: "POST", origin: config.frontendOrigin });
   assert.equal((await post()).status, 401);
@@ -145,6 +160,7 @@ test("participation readiness checks server credentials with a non-writing null-
   const { request } = await setup(t, { env: { QQ_APP_ID: "1905775107", QQ_APP_KEY: "qq-test", SUPABASE_URL: "https://database.example", SUPABASE_SECRET_KEY: "sb_secret_health_only" },
     fetchImpl: async (url, options) => {
       calls++;
+      if (url.pathname === "/rest/v1/rpc/qq_moderation_health") return Response.json({ok:true,version:1});
       assert.equal(url.pathname, "/rest/v1/rpc/qq_participate");
       assert.equal(JSON.parse(options.body).p_period_id, null);
       assert.equal(JSON.parse(options.body).p_operation, "votes");
@@ -152,7 +168,7 @@ test("participation readiness checks server credentials with a non-writing null-
     } });
   assert.equal((await request("/qq/participation-health")).status, 200);
   assert.deepEqual(await (await request("/qq/participation-health")).json(), { ok: true });
-  assert.equal(calls, 1, "Cache probes briefly to avoid repeated provider requests");
+  assert.equal(calls, 2, "Cache both probes briefly to avoid repeated provider requests");
   const unavailable = await setup(t);
   assert.equal((await unavailable.request("/qq/participation-health")).status, 503);
   const failed = await setup(t, { env: { QQ_APP_ID: "1905775107", QQ_APP_KEY: "qq-test", SUPABASE_URL: "https://database.example", SUPABASE_SECRET_KEY: "sb_secret_health_only" },

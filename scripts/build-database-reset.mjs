@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 
 const root = new URL("../", import.meta.url);
-export const sourceFiles = ["supabase-schema.sql", "supabase-admin-workflow.sql", "supabase-database-integrity.sql", "supabase-test-mode.sql", "supabase-qq-participation.sql"];
+export const sourceFiles = ["supabase-schema.sql", "supabase-admin-workflow.sql", "supabase-database-integrity.sql", "supabase-test-mode.sql", "supabase-qq-participation.sql", "supabase-account-moderation.sql"];
 const resetTables = ["song_reports", "song_dislikes", "song_likes", "broadcast_playlists", "songs", "announcements", "vote_attempts", "api_request_attempts", "playlist_periods", "admin_action_log", "database_repair_archive", "security_settings", "test_accounts"];
 
 export function buildResetSql() {
@@ -24,7 +24,7 @@ export function buildResetSql() {
 -- WARNING: running this SQL permanently clears this app's existing business data.
 -- Deletes songs, votes, reports, periods, announcements, broadcast playlists, logs,
 -- security settings and test-account grants, then rebuilds the latest schema and permissions.
--- Preserves auth.users (login accounts), public.admin_users (admin authorization), public.qq_accounts (QQ identities),
+-- Preserves auth.users, public.admin_users, public.qq_accounts and account moderation/notice history,
 -- Storage and unrelated tables. Existing test accounts need to be authorized again.
 -- Run the ENTIRE file once in Supabase SQL Editor during a maintenance window.
 -- Close app tabs and other database queries first. Busy tables abort safely before deletion.

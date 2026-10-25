@@ -18,6 +18,24 @@ export async function isCurrentUserAdmin() {
 
 // ---------- 参与规则（数据库按每个账号、每期强制执行） ----------
 
+export async function fetchQqAccounts(search = "", page = 1) {
+  const { data, error } = await supabase.rpc("admin_list_qq_accounts", { p_search: search.trim(), p_offset: (page - 1) * 20, p_limit: 20 });
+  if (error) throwWorkflowError(error);
+  return data;
+}
+
+export async function fetchAccountModeration(accountId) {
+  const { data, error } = await supabase.rpc("admin_get_account_moderation", { p_account_id: accountId });
+  if (error) throwWorkflowError(error);
+  return data;
+}
+
+export async function moderateAccount({ accountId, action, reason, durationHours, expectedVersion }) {
+  const { error } = await supabase.rpc("admin_moderate_account", { p_account_id: accountId, p_action: action,
+    p_reason: reason.trim(), p_duration_hours: durationHours, p_expected_version: expectedVersion });
+  if (error) throwWorkflowError(error);
+}
+
 const participationColumns = "submission_cookie_per_period,max_likes_per_period";
 export const MAX_PARTICIPATION_LIMIT = 2147483647;
 

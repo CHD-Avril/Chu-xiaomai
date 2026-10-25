@@ -110,9 +110,13 @@ async function assertMaintenanceConcurrency(db, reset) {
   assert.equal((await participate('like',song.id)).liked,true);
   await db.exec('reset role');
   const qqId=(await one(db,"select id from qq_accounts where openid='RESET_QQ_ACCOUNT'")).id;
+  await identity(db,admin,'admin@example.invalid');
+  await db.query("select admin_moderate_account($1,'ban','重建后仍应生效',null,0)",[qqId]);
   await identity(db,null,null);assert.equal((await one(db,'select count(*)::int n from songs')).n,0);
   await db.exec('reset role');await db.exec(reset);await assertEmptyBusiness(db);
   assert.equal((await one(db,"select id from qq_accounts where openid='RESET_QQ_ACCOUNT'")).id,qqId,'Reset must preserve durable QQ identity');
+  assert.equal((await one(db,'select qq_moderation_state($1) state',[qqId])).state.banned,true,'Reset must not erase existing bans');
+  assert.equal((await one(db,'select count(*)::int n from account_moderation_actions where account_id=$1',[qqId])).n,1);
   console.log('PASS one-file rebuild from legacy schema without period_id and non-UUID old data; latest populated schema reset; accounts/admins/Storage/unrelated objects preserved; test login/submission/votes and isolation work');
 
   // A dependency outside the named application tables must abort before losing data.

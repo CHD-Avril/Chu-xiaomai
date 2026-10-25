@@ -6,6 +6,7 @@ import { readRequest } from "../services/readRequest";
 
 let testSessionRequest = 0;
 let qqSessionRequest = 0;
+let accountRequest = 0;
 
 export const useAuthStore = defineStore("auth", {
   state: () => ({
@@ -17,6 +18,10 @@ export const useAuthStore = defineStore("auth", {
     qqBusy: false,
     qqMode: "",
     qqError: "",
+    qqAccount: null,
+    qqAccountLoading: false,
+    qqAccountError: "",
+    qqAccountUpdatedAt: 0,
     testUser: null,
     isTester: false,
     testAuthBusy: false,
@@ -150,13 +155,49 @@ export const useAuthStore = defineStore("auth", {
       try {
         const data = await qqRequest("/session");
         if (request !== qqSessionRequest) return;
-        this.qqUser = data.user?.openid ? data.user : null;
+        const nextUser = data.user?.openid ? data.user : null;
+        if (this.qqUser?.openid !== nextUser?.openid) this.clearQqAccount();
+        this.qqUser = nextUser;
         this.qqMode = data.mode;
+        if (this.qqUser) await this.refreshQqAccount();
+        else this.clearQqAccount();
       } catch (error) {
         if (request !== qqSessionRequest) return;
         this.qqUser = null;
+        this.clearQqAccount();
         this.qqError = error.message;
       }
+    },
+
+    clearQqAccount() {
+      ++accountRequest;
+      this.qqAccount = null;
+      this.qqAccountLoading = false;
+      this.qqAccountError = "";
+      this.qqAccountUpdatedAt = 0;
+    },
+
+    async refreshQqAccount({ maxAge = 0 } = {}) {
+      if (!this.isQqLoggedIn || this.qqBusy || this.qqAccountLoading || (maxAge && Date.now() - this.qqAccountUpdatedAt < maxAge)) return;
+      const request = ++accountRequest, openid = this.qqUser.openid;
+      this.qqAccountLoading = true;
+      try {
+        const account = await qqRequest("/participate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation: "account" }) });
+        if (request !== accountRequest || this.qqUser?.openid !== openid) return;
+        this.qqAccount = account;
+        this.qqAccountError = "";
+        this.qqAccountUpdatedAt = Date.now();
+      } catch (error) {
+        if (request !== accountRequest || this.qqUser?.openid !== openid) return;
+        this.qqAccountError = error.message;
+        if (error.code === "qq_login_required") { this.qqUser = null; this.clearQqAccount(); }
+      } finally { if (request === accountRequest) this.qqAccountLoading = false; }
+    },
+
+    async readQqNotice(noticeId = null) {
+      const openid = this.qqUser?.openid;
+      await qqRequest("/participate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation: "read_notice", noticeId }) });
+      if (this.qqUser?.openid === openid) await this.refreshQqAccount();
     },
 
     readQqCallbackError() {
@@ -188,6 +229,7 @@ export const useAuthStore = defineStore("auth", {
       try {
         await qqRequest("/logout", { method: "POST" });
         this.qqUser = null;
+        this.clearQqAccount();
       } catch (error) {
         this.qqError = `退出未完成。${error.message}`;
       } finally {

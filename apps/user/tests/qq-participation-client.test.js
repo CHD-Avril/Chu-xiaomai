@@ -90,6 +90,13 @@ test("guests only browse; QQ votes use the session gateway; expired sessions and
     resolveVotes(Response.json({likes:[songId],dislikes:[]}));await refreshing;
     assert.equal(songs.likedSongIds.size,0,"An old account's pending read must not appear for a new account");
     assert.equal(songs.personalVotesAccount,"");
+    auth.qqAccountLoading=true; // Status below represents a verified backend result.
+    auth.qqAccount={id:periodId,moderation:{banned:true,ban_until:null,vote_restricted:false,submission_restricted:false},
+      unread_count:1,notices:[{id:songId,action:"ban",reason:"<script>unsafe()</script>",expires_at:null,created_at:"2026-10-25T00:00:00Z",is_read:false}]};
+    html=await render("/src/views/ProfileView.vue");
+    assert(html.includes("账号参与权限受限"));assert(html.includes("长期，直至管理员解除"));
+    assert(html.includes("&lt;script&gt;unsafe()&lt;/script&gt;"));assert(!html.includes("<script>unsafe()"));
+    assert(html.includes("站内通知"));assert(html.includes("标为已读"));
   } finally {
     await server?.close();
     for (const [key,descriptor] of Object.entries(saved)) {

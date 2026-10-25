@@ -9,6 +9,7 @@ import AppLayout from "./layouts/AppLayout.vue";
 import AnnouncementModal from "./components/AnnouncementModal.vue";
 import IdentityNotice from "./components/IdentityNotice.vue";
 import TestModeAccess from "./components/TestModeAccess.vue";
+import AccountNotice from "./components/AccountNotice.vue";
 import { supabase } from "./services/supabase";
 
 const route = useRoute();
@@ -28,6 +29,7 @@ function refreshVisibleData(maxAge = 15000) {
   if (!ready || document.visibilityState !== "visible") return;
   songsStore.refresh({ background: true, maxAge });
   announcementStore.fetchAnnouncements({ background: true, maxAge });
+  authStore.refreshQqAccount({ maxAge: 60000 });
 }
 const onFocus = () => {
   refreshVisibleData();
@@ -98,6 +100,7 @@ onMounted(async () => {
 <template>
   <AppLayout>
     <IdentityNotice v-if="route.path !== '/me'" />
+    <AccountNotice v-if="route.path !== '/me'" />
     <TestModeAccess v-if="periodStore.currentPeriod?.isTest && route.path !== '/me'" />
     <router-view v-if="!testLocked || route.path === '/history' || route.path === '/me'" :key="authStore.isTester ? authStore.testUser?.id : 'visitor'" />
   </AppLayout>
