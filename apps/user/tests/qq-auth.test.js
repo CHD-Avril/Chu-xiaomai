@@ -125,6 +125,11 @@ test("participation requires a verified QQ session, binds identity on server and
   assert.equal(databaseCalls.at(-1).p_test_user_id, "22222222-2222-4222-8222-222222222222");
   assert.equal(databaseCalls.at(-1).p_client_ip, "192.0.2.5");
   assert.equal((await post({ extraHeaders: { authorization: "Bearer expired-tester-token-123456789" } })).status, 403);
+  assert.equal((await post({body:{operation:"submit",periodId,title:"任意歌",artist:"任意人"}})).status,400);
+  assert.equal((await post({body:{operation:"submit",periodId,catalogId:periodId,title:"伪造",openid:"伪造"}})).status,200);
+  assert.equal(databaseCalls.at(-1).p_song_id,periodId);
+  assert.equal(databaseCalls.at(-1).p_title,undefined);
+  assert.equal(databaseCalls.at(-1).p_openid,"VERIFIED_QQ_A");
   databaseFailure = true;
   const failure = await post();
   assert.equal(failure.status, 503);
@@ -160,7 +165,7 @@ test("participation readiness checks server credentials with a non-writing null-
   const { request } = await setup(t, { env: { QQ_APP_ID: "1905775107", QQ_APP_KEY: "qq-test", SUPABASE_URL: "https://database.example", SUPABASE_SECRET_KEY: "sb_secret_health_only" },
     fetchImpl: async (url, options) => {
       calls++;
-      if (url.pathname === "/rest/v1/rpc/qq_moderation_health") return Response.json({ok:true,version:1});
+      if (["/rest/v1/rpc/qq_moderation_health", "/rest/v1/rpc/qq_catalog_health"].includes(url.pathname)) return Response.json({ok:true,version:1});
       assert.equal(url.pathname, "/rest/v1/rpc/qq_participate");
       assert.equal(JSON.parse(options.body).p_period_id, null);
       assert.equal(JSON.parse(options.body).p_operation, "votes");
@@ -168,7 +173,7 @@ test("participation readiness checks server credentials with a non-writing null-
     } });
   assert.equal((await request("/qq/participation-health")).status, 200);
   assert.deepEqual(await (await request("/qq/participation-health")).json(), { ok: true });
-  assert.equal(calls, 2, "Cache both probes briefly to avoid repeated provider requests");
+  assert.equal(calls, 3, "Cache all probes briefly to avoid repeated provider requests");
   const unavailable = await setup(t);
   assert.equal((await unavailable.request("/qq/participation-health")).status, 503);
   const failed = await setup(t, { env: { QQ_APP_ID: "1905775107", QQ_APP_KEY: "qq-test", SUPABASE_URL: "https://database.example", SUPABASE_SECRET_KEY: "sb_secret_health_only" },

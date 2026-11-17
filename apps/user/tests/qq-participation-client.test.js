@@ -13,7 +13,7 @@ test("guests only browse; QQ votes use the session gateway; expired sessions and
   const periodId = "11111111-1111-4111-8111-111111111111";
   const songId = "22222222-2222-4222-8222-222222222222";
   const requests = [];
-  let expired = false, failVotes = false, deferVotes, pendingVotes;
+  let expired = false, failVotes = false, failCatalog = false, deferVotes, pendingVotes;
   globalThis.location = { origin: "https://chuxiaomai.cyou", href: "https://chuxiaomai.cyou/#/playlist" };
   globalThis.window = { matchMedia: () => ({ matches: false }) };
   globalThis.fetch = async (input, options = {}) => {
@@ -22,6 +22,8 @@ test("guests only browse; QQ votes use the session gateway; expired sessions and
     requests.push({path,body,options});
     if (path.endsWith("/playlist_periods")) return Response.json([{ id: periodId, title:"本期", status:"active", starts_at:"2020-01-01", ends_at:"2099-01-01", is_test:false }]);
     if (path.endsWith("/songs")) return Response.json([{ id:songId, title:"晴天", artist:"周杰伦", likes_count:2, dislikes_count:0 }]);
+    if (path.endsWith("/get_song_catalog") && failCatalog) return Response.json({code:"42501",message:"permission"},{status:403});
+    if (path.endsWith("/get_song_catalog")) return Response.json([{id:songId,title:"曲库新歌",artist:"歌手",duration_seconds:200}]);
     assert.equal(path,"/qq/participate","No browser may call the legacy mutation RPCs");
     assert.equal(options.credentials,"same-origin");
     for (const key of ["openid","userId","voterCookie","p_openid","p_voter_cookie"]) assert.equal(body[key],undefined);
@@ -58,7 +60,7 @@ test("guests only browse; QQ votes use the session gateway; expired sessions and
     assert.equal((html.match(/<button[^>]*disabled/g)||[]).length,2);
     assert(html.includes("请先 QQ 登录"));
     html=await render("/src/components/SubmissionForm.vue");
-    assert.equal((html.match(/<input[^>]*disabled/g)||[]).length,2);assert(html.includes("QQ 登录后可投稿"));
+    assert(html.includes("选这首")); assert(/<button[^>]*disabled[^>]*[^]*?选这首/.test(html));assert(html.includes("QQ 登录后可投稿"));
     assert((await render("/src/components/IdentityNotice.vue")).includes("游客模式"));
 
     auth.qqUser={openid:"QQ_A",nickname:"同学A"};songs.clearPersonalState();
@@ -66,11 +68,19 @@ test("guests only browse; QQ votes use the session gateway; expired sessions and
     await songs.refresh();
     assert.equal(songs.canMutate,true);assert(songs.likedSongIds.has(songId));
     html=await render("/src/components/SongCard.vue",{song:songs.songs[0],rank:1});assert(!/<button[^>]*disabled/.test(html));
+    assert.equal(await songs.submitSong("unknown"),false);
+    assert.equal(await songs.submitSong(songId),true);
+    const submitted=requests.find(r=>r.body?.operation==="submit");
+    assert.deepEqual(submitted.body,{operation:"submit",catalogId:songId,periodId});
     await songs.toggleLikeSong(songs.songs[0]);
     assert.deepEqual(requests.at(-1).body,{operation:"like",songId,periodId,action:"off"});
     assert.equal(songs.likedSongIds.has(songId),false);
     await songs.toggleDislikeSong(songs.songs[0],"不适合播出");
     assert.equal(requests.at(-1).body.operation,"dislike");assert(songs.dislikedSongIds.has(songId));
+    failCatalog=true;await songs.refresh();
+    assert(songs.catalogError);assert.equal(songs.songs.length,1);assert.equal(songs.catalogSongs.length,0);
+    const beforeInvalid=requests.length;assert.equal(await songs.submitSong(songId),false);assert.equal(requests.length,beforeInvalid);
+    failCatalog=false;await songs.refresh();assert.equal(songs.catalogError,"");
     expired=true;await songs.toggleLikeSong(songs.songs[0]);
     assert.equal(auth.qqUser,null);assert.equal(songs.canMutate,false);
     assert.equal(songs.likedSongIds.size,0);assert.equal(songs.dislikedSongIds.size,0);

@@ -142,10 +142,9 @@ function participationParams(body) {
   if (!["votes", "submit", "like", "dislike"].includes(body.operation) || !uuidPattern.test(body.periodId || "")) throw participationError("invalid_request");
   const params = { p_operation: body.operation, p_period_id: body.periodId };
   if (body.operation === "submit") {
-    for (const field of ["title", "artist"]) {
-      if (typeof body[field] !== "string" || !body[field].trim() || [...body[field].trim()].length > 80) throw participationError("invalid_request");
-      params[`p_${field}`] = body[field].trim();
-    }
+    if (!uuidPattern.test(body.catalogId || "")) throw participationError("invalid_request");
+    // The shared gateway uses song_id as the catalog ID only for submit.
+    params.p_song_id = body.catalogId;
   } else if (["like", "dislike"].includes(body.operation)) {
     if (!uuidPattern.test(body.songId || "") || !["on", "off"].includes(body.action)) throw participationError("invalid_request");
     params.p_song_id = body.songId;
@@ -261,7 +260,11 @@ export function createQqServer(config, { fetchImpl = fetch, now = Date.now } = {
           const moderation = await fetchImpl(new URL("/rest/v1/rpc/qq_moderation_health", config.databaseUrl), {
             method: "POST", headers, signal: AbortSignal.timeout(10000), redirect: "error", body: "{}",
           });
-          return moderation.ok && (await moderation.json()).ok === true;
+          if (!moderation.ok || (await moderation.json()).ok !== true) return false;
+          const catalog = await fetchImpl(new URL("/rest/v1/rpc/qq_catalog_health", config.databaseUrl), {
+            method: "POST", headers, signal: AbortSignal.timeout(10000), redirect: "error", body: "{}",
+          });
+          return catalog.ok && (await catalog.json()).ok === true;
         } catch { return false; }
       })() };
     }

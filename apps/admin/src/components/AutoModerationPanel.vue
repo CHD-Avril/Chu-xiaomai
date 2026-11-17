@@ -22,7 +22,7 @@ const HIGH_RISK = [
   { pattern: /伊斯兰|清真寺|诵经|阿訇|传教|基督徒|教堂|祷告/i, reason: "宗教内容，一般不播（特殊节目除外）" },
   { pattern: /劣迹|封杀|涉毒|吸毒|嫖娼|偷税|范冰冰|吴亦凡|郑爽|张哲瀚|赵薇|高云翔|吴秀波|陈建州/i, reason: "劣迹/被封杀艺人，不播" },
   { pattern: /fuck|shit|bitch|操你|妈的|傻逼|艹|尼玛|狗日|卖淫|赌博|毒品/i, reason: "违法/低俗内容，不播" },
-  { pattern: /DJ[·.・]|DJ版|DJ串烧|DJ/i, reason: "DJ类不播（公告规则3）" },
+  { pattern: /DJ[·.・]|DJ版|DJ串烧|\bDJ\b/i, reason: "DJ类不播（公告规则3）" },
   { pattern: /喊麦|土嗨|电音|remix|串烧|慢摇|club/i, reason: "喊麦/土嗨/电音不播（公告规则3）" },
   { pattern: /洛天依|初音|VOCALOID|虚拟歌姬|虚拟歌手|V家|AI歌|赛博歌姬/i, reason: "虚拟歌姬不播（公告规则3）" },
   { pattern: /鬼畜|洗脑神曲|整活|恶搞|鬼叫|抖肩|咋了爸爸|江南Style|小苹果|最炫民族风|伤不起|忐忑/i, reason: "整活/鬼畜歌曲不播（公告规则3）" },

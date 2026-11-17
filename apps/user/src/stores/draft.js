@@ -11,10 +11,11 @@ export const useDraftStore = defineStore("songDraft", () => {
   } catch { storageAvailable.value = false; }
 
   const draft = reactive({
+    catalogId: typeof saved.catalogId === "string" ? saved.catalogId : "",
     title: typeof saved.title === "string" ? saved.title.slice(0, 80) : "",
     artist: typeof saved.artist === "string" ? saved.artist.slice(0, 80) : "",
   });
-  const hasDraft = computed(() => Boolean(draft.title || draft.artist));
+  const hasDraft = computed(() => Boolean(draft.catalogId || draft.title || draft.artist));
   watch(draft, (value) => {
     try {
       if (value.title || value.artist) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(value));
@@ -26,6 +27,7 @@ export const useDraftStore = defineStore("songDraft", () => {
   function clear() {
     draft.title = "";
     draft.artist = "";
+    draft.catalogId = "";
   }
   return { draft, hasDraft, storageAvailable, clear };
 });

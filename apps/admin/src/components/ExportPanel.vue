@@ -19,6 +19,7 @@ import { useAdminStore } from "../stores/admin";
 import { useAuthStore } from "../stores/auth";
 import * as api from "../services/api";
 import { sanitizeFilename, formatDateForFilename, formatDateTime } from "../utils/format";
+import { copyToClipboard } from "../utils/clipboard";
 const store = useAdminStore(), auth = useAuthStore();
 const periodId = ref(""), songs = ref([]), loading = ref(false), loadError = ref("");
 const items = ref([]), version = ref(0), remoteVersion = ref(0), baseline = ref("[]");
@@ -162,7 +163,7 @@ async function exportList(kind, copy) {
     if (!rows.length) throw new Error(kind === "broadcast" ? "还没有确认播出的歌曲" : "没有符合条件的歌曲");
     const title = kind === "broadcast" ? "确认播出歌单" : "排名参考清单";
     const text = (period.value?.title || "") + " · " + title + "\n" + rows.map((s,i) => (i+1) + ". " + s.title + " - " + s.artist + " (" + s.likesCount + " 喜欢)" + (s.isLocked ? " [已锁定]" : "")).join("\n");
-    if (copy) await navigator.clipboard.writeText(text); else download(text, kind);
+    if (copy) await copyToClipboard(text); else download(text, kind);
     ElMessage.success((copy ? "已复制 " : "已下载 ") + rows.length + " 首" + title);
   } catch(e) { ElMessage.error(e.message || "导出失败"); } finally { exporting.value = false; }
 }

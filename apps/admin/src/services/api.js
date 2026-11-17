@@ -92,6 +92,20 @@ export async function createPeriod({ title, startsAt, endsAt }) {
   return data;
 }
 
+export async function prepareDailyPeriod(draft, currentPeriod) {
+  const { data, error } = await supabase.rpc("admin_prepare_daily_period", {
+    p_target_date: draft.date, p_title: draft.title.trim(),
+    p_start_time: draft.startTime, p_end_time: draft.endTime,
+    p_expected_current_id: currentPeriod?.id ?? null,
+    p_expected_updated_at: currentPeriod?.updatedAt ?? null,
+  });
+  if (["PGRST202", "42883"].includes(error?.code)) {
+    throw new Error("每日征集功能尚未启用，请执行增量迁移 supabase-daily-period.sql 后重试。");
+  }
+  if (error) throw error;
+  return data;
+}
+
 export async function archivePeriod(periodId) {
   const { error } = await supabase.rpc("admin_archive_playlist_period", { p_period_id: periodId });
   if (error) throwWorkflowError(error);
@@ -125,6 +139,47 @@ export async function fetchSongs(periodId) {
     rows.push(...(data ?? []));
     if (!data || data.length < 500) return mapSongs(rows);
   }
+}
+
+export async function fetchSongCatalog() {
+  return fetchEveryPage(() => supabase.from("song_catalog")
+    .select("id,title,artist,source_url,duration_seconds,is_available,is_active,notes,updated_at")
+    .order("title_lower").order("artist_lower").order("id"));
+}
+
+export async function upsertSongCatalog(song) {
+  const { data, error } = await supabase.rpc("admin_upsert_song_catalog", {
+    p_id: song.id || null,
+    p_title: song.title.trim(),
+    p_artist: song.artist.trim(),
+    p_source_url: song.sourceUrl?.trim() || null,
+    p_duration_seconds: song.durationSeconds ? Number(song.durationSeconds) : null,
+    p_is_available: song.isAvailable === true,
+    p_is_active: song.isActive !== false,
+    p_notes: song.notes?.trim() || "",
+  });
+  if (error) throwWorkflowError(error);
+  return data;
+}
+
+export async function fetchPeriodCatalogPolicy(periodId) {
+  const { data, error } = await supabase.from("period_catalog_policies")
+    .select("period_id,whitelist_enabled,allowed_catalog_ids,starts_at,ends_at,version,updated_at")
+    .eq("period_id", periodId).maybeSingle();
+  if (error) throwWorkflowError(error);
+  return data ?? { period_id: periodId, whitelist_enabled: false, allowed_catalog_ids: [], starts_at: null, ends_at: null, version: 0 };
+}
+
+export async function savePeriodCatalogPolicy(periodId, whitelistEnabled, allowedCatalogIds, startsAt, endsAt, version) {
+  const { error } = await supabase.rpc("admin_set_period_catalog_policy", {
+    p_period_id: periodId,
+    p_whitelist_enabled: whitelistEnabled === true,
+    p_allowed_catalog_ids: allowedCatalogIds,
+    p_starts_at: startsAt,
+    p_ends_at: endsAt,
+    p_version: version,
+  });
+  if (error) throwWorkflowError(error);
 }
 
 // ---------- 公告 ----------
@@ -273,6 +328,7 @@ export function normalizePeriod(period) {
     status: period.status ?? "archived",
     isTest: period.is_test === true,
     createdAtMs: Date.parse(period.created_at ?? "") || 0,
+    updatedAt: period.updated_at ?? null,
     archivedAtMs: Date.parse(period.archived_at ?? "") || 0,
   };
 }

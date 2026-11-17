@@ -16,7 +16,7 @@ import "element-plus/es/components/message-box/style/css";
 import "element-plus/es/components/table/style/css";
 import "element-plus/es/components/table-column/style/css";
 import "element-plus/es/components/tag/style/css";
-import { computed, onMounted, ref } from "vue";
+import { ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useAdminStore } from "../stores/admin";
@@ -29,6 +29,7 @@ const adminStore = useAdminStore();
 const authStore = useAuthStore();
 const route = useRoute();
 const router = useRouter();
+const emit = defineEmits(["navigate"]);
 
 const dialogVisible = ref(false);
 const saving = ref(false);
@@ -36,11 +37,11 @@ const form = ref({ title: "", startsAt: "", endsAt: "" });
 const editingId = ref(null);
 const archivingId = ref("");
 
-onMounted(() => {
+watch(() => route.query.action, () => {
   if (route.query.action === "edit" && adminStore.currentPeriod) openEdit(adminStore.currentPeriod);
   else if (route.query.action === "create") openCreate();
   if (route.query.action) router.replace({ query: { ...route.query, action: undefined } });
-});
+}, { immediate: true });
 
 const periodStatus = (period) => {
   const now = adminStore.now;
@@ -84,6 +85,13 @@ async function handleSave() {
   }
 
   saving.value = true;
+  if (endsAt.getTime() - startsAt.getTime() < 3600000) {
+    try {
+      await ElMessageBox.confirm("征集时间不足 1 小时，请检查是否把下午 18:00 填成了凌晨 00:18。仍要保存吗？", "核对征集时长", {
+        confirmButtonText: "时间无误，保存", cancelButtonText: "返回修改", type: "warning",
+      });
+    } catch { saving.value = false; return; }
+  }
   if (!editingId.value && adminStore.currentPeriod) {
     try {
       await ElMessageBox.confirm(`创建「${form.value.title.trim()}」将立即归档「${adminStore.currentPeriod.title}」，停止旧期投稿和投票。${startsAt.getTime() > Date.now() ? "新期尚未开始，两期之间将暂时无法参与。" : ""}确认切换？`, "切换征集期", {
@@ -151,9 +159,12 @@ async function handleArchive(period) {
   <div>
     <el-card class="panel-card" shadow="never">
       <template #header>
-        <div style="display: flex; align-items: center; justify-content: space-between">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px">
           <span>当前进行中的征集期</span>
-          <el-button type="primary" @click="openCreate">新建征集期</el-button>
+          <div>
+            <el-button type="primary" @click="emit('navigate', 'periods', 'daily')">快捷设置征集</el-button>
+            <el-button @click="openCreate">自定义新建</el-button>
+          </div>
         </div>
       </template>
 
