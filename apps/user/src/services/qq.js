@@ -1,6 +1,17 @@
 // Same-origin backend only. AppKey and provider tokens never enter the browser.
+import { supabase } from "./supabase";
+
 export const qqAuthBase = (import.meta.env.VITE_QQ_AUTH_BASE || "").replace(/\/$/, "");
 export const qqEnabled = Boolean(qqAuthBase);
+export const demoLoginEnabled = import.meta.env.VITE_DEMO_LOGIN === "1";
+export const demoText = demoLoginEnabled
+  ? { login: "演示登录", loggedIn: "演示已登录", account: "演示账号", user: "演示用户", loginPrompt: "登录演示账号，和大家一起分享想听的歌。" }
+  : { login: "QQ 登录", loggedIn: "QQ 已登录", account: "QQ 账号", user: "QQ 用户", loginPrompt: "登录 QQ，和大家一起分享想听的歌。" };
+export function guestPrompt(action) {
+  return demoLoginEnabled
+    ? `游客模式仅可浏览，请先演示登录再${action}。`
+    : `游客模式仅可浏览，请先 QQ 登录再${action}。`;
+}
 export const QQ_USER_STORAGE_KEY = "chu_xiaomai_qq_user"; // Remove old, unverified Mock profiles.
 
 export const qqErrorMessages = {
@@ -36,10 +47,15 @@ export async function qqRequest(path, options = {}) {
   if (!qqEnabled) throw new Error("QQ 登录暂未开放，请稍后再试。");
   const base = new URL(qqAuthBase, location.origin);
   if (base.origin !== location.origin) throw new Error("QQ 登录需要配置本站的授权后端。");
+  const headers = { ...(options.headers || {}) };
+  if (demoLoginEnabled && supabase) {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.access_token) headers.Authorization = `Bearer ${data.session.access_token}`;
+  }
   let response;
   try {
     response = await fetch(`${qqAuthBase}${path}`, {
-      ...options, credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(10000),
+      ...options, headers, credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(10000),
     });
     if (!response.headers.get("Content-Type")?.includes("application/json")) throw new Error("auth_unavailable");
     const data = await response.json();

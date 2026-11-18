@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { supabase, hasValidConfig } from "../services/supabase";
 import { isAdminEmailAllowed, isCurrentUserAdmin } from "../services/api";
-import { qqEnabled, QQ_USER_STORAGE_KEY, qqRequest, qqErrorMessages, getQqAuthorizeUrl } from "../services/qq";
+import { qqEnabled, QQ_USER_STORAGE_KEY, qqRequest, qqErrorMessages, getQqAuthorizeUrl, demoLoginEnabled } from "../services/qq";
 import { readRequest } from "../services/readRequest";
 
 let testSessionRequest = 0;
@@ -25,6 +25,7 @@ export const useAuthStore = defineStore("auth", {
     testUser: null,
     isTester: false,
     testAuthBusy: false,
+    demoDialogOpen: false,
   }),
 
   getters: {
@@ -212,6 +213,10 @@ export const useAuthStore = defineStore("auth", {
     qqLogin() {
       if (this.qqBusy) return;
       this.qqError = "";
+      if (demoLoginEnabled) {
+        this.demoDialogOpen = true;
+        return;
+      }
       ++qqSessionRequest;
       try {
         // Navigate synchronously: authorization must not wait for /session.
@@ -221,6 +226,21 @@ export const useAuthStore = defineStore("auth", {
       }
     },
 
+    async demoLogin(email, password) {
+      if (!supabase) throw new Error("暂时无法连接登录服务。");
+      this.qqBusy = true;
+      this.qqError = "";
+      try {
+        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+        if (error) throw new Error("登录失败，请检查邮箱和密码。");
+      } finally {
+        this.qqBusy = false;
+      }
+      await this.restoreQqUser();
+      if (!this.isQqLoggedIn) throw new Error("登录状态建立失败，请重试。");
+      this.demoDialogOpen = false;
+    },
+
     async qqLogout() {
       if (this.qqBusy) return;
       this.qqBusy = true;
@@ -228,6 +248,7 @@ export const useAuthStore = defineStore("auth", {
       ++qqSessionRequest;
       try {
         await qqRequest("/logout", { method: "POST" });
+        if (demoLoginEnabled && supabase) await supabase.auth.signOut({ scope: "local" });
         this.qqUser = null;
         this.clearQqAccount();
       } catch (error) {

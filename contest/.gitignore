@@ -1,0 +1,3 @@
+web/
+.env.contest
+.env.contest.local

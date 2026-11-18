@@ -1,6 +1,7 @@
 <script setup>
 import { getAdminUrl } from "../services/adminEntry";
 import { usePeriodStore } from "../stores/period";
+import { demoText } from "../services/qq";
 const periodStore = usePeriodStore();
 const adminUrl = getAdminUrl();
 </script>
@@ -23,7 +24,7 @@ const adminUrl = getAdminUrl();
       </a>
     </div>
     <div class="footer-actions">
-      <span>{{ periodStore.currentPeriod?.isTest ? '测试期需 QQ 登录及测试账号授权' : '游客可浏览 · QQ 登录后投稿和投票' }}</span>
+      <span>{{ periodStore.currentPeriod?.isTest ? '测试期需 QQ 登录及测试账号授权' : `游客可浏览 · ${demoText.login}后投稿和投票` }}</span>
       <a class="text-link" aria-label="管理员入口" :href="adminUrl">管理入口 ↗</a>
     </div>
   </footer>

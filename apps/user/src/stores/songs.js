@@ -12,6 +12,7 @@ import {
 import { normalizeText, resolveErrorMessage } from "../utils/format";
 import { SONGS_PER_PAGE } from "../utils/pagination";
 import { describeConnectionIssue } from "../utils/connectionIssue";
+import { demoText, guestPrompt } from "../services/qq";
 
 const DAILY_RECOMMENDATION_LIMIT = 5;
 
@@ -283,7 +284,7 @@ export const useSongsStore = defineStore("songs", {
 
       if (!this.canSubmit) {
         this.formHintType = "error";
-        this.formHint = !authStore.isQqLoggedIn ? "游客模式仅可浏览，请先 QQ 登录再投稿。" : authStore.qqAccount?.moderation?.banned || authStore.qqAccount?.moderation?.submission_restricted ? "该账号暂不能投稿，请到个人中心查看处理详情。" : "当前暂时无法投稿，请查看征集状态或刷新页面重试。";
+        this.formHint = !authStore.isQqLoggedIn ? guestPrompt("投稿") : authStore.qqAccount?.moderation?.banned || authStore.qqAccount?.moderation?.submission_restricted ? "该账号暂不能投稿，请到个人中心查看处理详情。" : "当前暂时无法投稿，请查看征集状态或刷新页面重试。";
         return false;
       }
       const selected = this.catalogSongs.find(song => song.id === catalogId);
@@ -334,7 +335,7 @@ export const useSongsStore = defineStore("songs", {
     },
 
     async toggleLikeSong(song) {
-      if (!useAuthStore().isQqLoggedIn) { this.voteError = "游客模式仅可浏览，请先 QQ 登录再点喜欢。"; return false; }
+      if (!useAuthStore().isQqLoggedIn) { this.voteError = guestPrompt("点喜欢"); return false; }
       if (!this.canVote || song.isLocked || this.likingSongId || this.dislikingSongId) return;
       const authStore = useAuthStore();
       const periodStore = usePeriodStore();
@@ -370,7 +371,7 @@ export const useSongsStore = defineStore("songs", {
     },
 
     async toggleDislikeSong(song, reason = "") {
-      if (!useAuthStore().isQqLoggedIn) { this.voteError = "游客模式仅可浏览，请先 QQ 登录再点踩。"; return false; }
+      if (!useAuthStore().isQqLoggedIn) { this.voteError = guestPrompt("点踩"); return false; }
       if (!this.canVote || song.isLocked || this.dislikingSongId || this.likingSongId) return;
       const authStore = useAuthStore();
       const periodStore = usePeriodStore();

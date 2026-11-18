@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useAuthStore } from "../stores/auth";
+import { demoLoginEnabled, demoText } from "../services/qq";
 import qqLoginIcon from "../assets/qq-login-icon.png";
 import { ACCOUNT_ACTION_LABELS, TIMED_ACCOUNT_ACTIONS } from "../../../shared/accountModeration";
 import { formatDateTime } from "../utils/format";
@@ -8,7 +9,7 @@ import { formatDateTime } from "../utils/format";
 const auth = useAuthStore();
 const avatarFailed = ref(false);
 const readingNotice = ref(false), noticeError = ref("");
-const nickname = computed(() => auth.qqUser?.nickname || "QQ 用户");
+const nickname = computed(() => auth.qqUser?.nickname || demoText.user);
 watch(() => auth.qqUser?.avatar, () => { avatarFailed.value = false; });
 watch(() => auth.qqUser?.openid, () => { noticeError.value = ""; if (auth.isQqLoggedIn) auth.refreshQqAccount(); }, { immediate: true });
 const moderation = computed(() => auth.qqAccount?.moderation);
@@ -26,7 +27,7 @@ async function markRead(id = null) {
   <section class="card profile-panel" aria-labelledby="profile-title">
     <div class="section-head">
       <h1 id="profile-title">个人中心</h1>
-      <span class="profile-status" :class="{ 'is-guest': !auth.isQqLoggedIn }">{{ auth.isQqLoggedIn ? 'QQ 已登录' : '游客模式' }}</span>
+      <span class="profile-status" :class="{ 'is-guest': !auth.isQqLoggedIn }">{{ auth.isQqLoggedIn ? demoText.loggedIn : '游客模式' }}</span>
     </div>
 
     <div class="profile-summary">
@@ -36,13 +37,13 @@ async function markRead(id = null) {
       </div>
       <div class="profile-intro">
         <h2>{{ auth.isQqLoggedIn ? nickname : '欢迎来到点歌台' }}</h2>
-        <p>{{ auth.isQqLoggedIn ? '用喜欢的音乐，留下你的校园声音。' : '登录 QQ，和大家一起分享想听的歌。' }}</p>
+        <p>{{ auth.isQqLoggedIn ? '用喜欢的音乐，留下你的校园声音。' : demoText.loginPrompt }}</p>
       </div>
     </div>
 
     <dl v-if="auth.isQqLoggedIn" class="profile-details">
       <div><dt>昵称</dt><dd>{{ nickname }}</dd></div>
-      <div><dt>登录方式</dt><dd>QQ 登录<span v-if="auth.qqMode === 'mock'" class="profile-mock">本地模拟</span></dd></div>
+      <div><dt>登录方式</dt><dd>{{ demoText.login }}<span v-if="auth.qqMode === 'mock'" class="profile-mock">本地模拟</span><span v-else-if="demoLoginEnabled" class="profile-mock">参赛演示</span></dd></div>
       <div><dt>当前身份</dt><dd>已登录用户</dd></div>
       <div v-if="auth.qqAccount?.id"><dt>站内账号</dt><dd class="site-account-id">{{ auth.qqAccount.id }}</dd></div>
     </dl>
@@ -54,7 +55,7 @@ async function markRead(id = null) {
         <p v-if="moderation.vote_restricted">投票权限受限（包括取消投票） · {{ expiry(moderation.vote_until) }}。</p>
         <p v-if="moderation.submission_restricted">投稿权限受限 · {{ expiry(moderation.submission_until) }}。</p>
       </template>
-      <p v-else>{{ auth.isQqLoggedIn ? '征集开放期间可以投稿、点喜欢和点踩。退出后将恢复游客模式。' : '你可以查看榜单、往期歌单和公告；投稿、点喜欢和点踩需要先 QQ 登录。' }}</p>
+      <p v-else>{{ auth.isQqLoggedIn ? '征集开放期间可以投稿、点喜欢和点踩。退出后将恢复游客模式。' : `你可以查看榜单、往期歌单和公告；投稿、点喜欢和点踩需要先${demoLoginEnabled ? '演示登录' : ' QQ 登录'}。` }}</p>
     </div>
 
     <section v-if="auth.isQqLoggedIn" class="account-notices" aria-labelledby="account-notices-title">
@@ -76,7 +77,7 @@ async function markRead(id = null) {
 
     <div class="profile-actions">
       <button v-if="!auth.isQqLoggedIn" class="primary-button" type="button" :disabled="auth.qqBusy" @click="auth.qqLogin()">
-        <img :src="qqLoginIcon" width="16" height="16" alt="" aria-hidden="true" />QQ 登录
+        <img v-if="!demoLoginEnabled" :src="qqLoginIcon" width="16" height="16" alt="" aria-hidden="true" />{{ demoText.login }}
       </button>
       <router-link class="primary-button secondary-btn" to="/playlist">查看榜单 ↗</router-link>
       <button v-if="auth.isQqLoggedIn" class="text-link profile-logout" type="button" :disabled="auth.qqBusy" @click="auth.qqLogout()">{{ auth.qqBusy ? '正在退出…' : '退出登录' }}</button>

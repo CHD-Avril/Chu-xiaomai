@@ -10,6 +10,7 @@ import Pagination from "./Pagination.vue";
 import DailyRecommendations from "./DailyRecommendations.vue";
 import { SONGS_PER_PAGE } from "../utils/pagination";
 import ConnectionNotice from "./ConnectionNotice.vue";
+import { demoText } from "../services/qq";
 
 const songsStore = useSongsStore();
 const route = useRoute();
@@ -56,7 +57,7 @@ async function changePage(page) {
     </div>
     <details class="voting-guide">
       <summary>投票说明<span v-if="songsStore.lastUpdatedAt"> · {{ formatDateTime(songsStore.lastUpdatedAt) }} 更新</span></summary>
-      <p>QQ 登录后可投票，游客仅可浏览。{{ period?.isTest ? '测试期还需登录已授权的测试账号。' : '' }}喜欢与点踩互斥，再次点击可取消；点踩需填写理由，已提交的举报不会随取消点踩撤回。点击歌名可展开完整信息。</p>
+      <p>{{ demoText.login }}后可投票，游客仅可浏览。{{ period?.isTest ? '测试期还需登录已授权的测试账号。' : '' }}喜欢与点踩互斥，再次点击可取消；点踩需填写理由，已提交的举报不会随取消点踩撤回。点击歌名可展开完整信息。</p>
     </details>
     <div class="controls">
       <label class="field search-field">

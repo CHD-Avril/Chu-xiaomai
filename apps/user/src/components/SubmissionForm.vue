@@ -6,6 +6,7 @@ import { usePeriodStatus } from "../composables/usePeriodStatus";
 import { useAuthStore } from "../stores/auth";
 import { useRouter } from "vue-router";
 import ConnectionNotice from "./ConnectionNotice.vue";
+import { demoText } from "../services/qq";
 const songs = useSongsStore(), auth = useAuthStore(), drafts = useDraftStore(), router = useRouter();
 const { period, status } = usePeriodStatus();
 const keyword = ref("");
@@ -25,7 +26,7 @@ async function submit() { if (selected.value && await songs.submitSong(selected.
 
 <template>
   <section class="card form-panel" id="submit" :aria-busy="songs.isLoading || songs.isSubmitting">
-    <div class="section-head"><h2>今天，你想听什么？</h2><span class="no-login-note">{{ auth.isQqLoggedIn ? 'QQ 已登录' : 'QQ 登录后可投稿' }}</span></div>
+    <div class="section-head"><h2>今天，你想听什么？</h2><span class="no-login-note">{{ auth.isQqLoggedIn ? demoText.loggedIn : `${demoText.login}后可投稿` }}</span></div>
     <div class="submission-period-card"><span class="period-state-chip" :class="status.className">{{ status.label }}</span><div><strong>{{ period?.title || '校园点歌征集' }}</strong><p>{{ status.copy }}</p></div></div>
     <ConnectionNotice />
     <p class="section-note">从广播台确认音源的曲库中选择，本期节目选曲范围内的歌曲会显示在这里。</p>
@@ -46,7 +47,7 @@ async function submit() { if (selected.value && await songs.submitSong(selected.
     <form class="song-form" @submit.prevent="submit">
       <p v-if="selected">已选：{{ selected.title }} · {{ selected.artist }}</p>
       <p v-else-if="drafts.draft.catalogId">原选择已不在本期可点范围，请重新选择。</p>
-      <button class="primary-button" type="submit" :disabled="!songs.canSubmit || !selected || !!songs.catalogError || songs.isSubmitting">{{ !auth.isQqLoggedIn ? 'QQ 登录后可投稿' : songs.isSubmitting ? '正在投递…' : '提交这首歌 ↗' }}</button>
+      <button class="primary-button" type="submit" :disabled="!songs.canSubmit || !selected || !!songs.catalogError || songs.isSubmitting">{{ !auth.isQqLoggedIn ? `${demoText.login}后可投稿` : songs.isSubmitting ? '正在投递…' : '提交这首歌 ↗' }}</button>
     </form>
     <p class="form-hint" :class="{ 'is-error': songs.formHintType === 'error', 'is-success': songs.formHintType === 'success' }" role="status">{{ songs.formHint }}</p>
     <button v-if="songs.formHintType === 'success' && songs.lastSubmission?.songId" class="text-link" @click="locate(songs.lastSubmission.songId)">查看刚提交的歌曲 ↗</button>
