@@ -68,3 +68,6 @@ node_modules/
 
 # dataconnect generated files
 .dataconnect
+
+# 本地离线部署包与一键启动脚本（旧构建产物，勿入库）
+/*.zip
