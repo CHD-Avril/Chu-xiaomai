@@ -8,11 +8,14 @@ import ParticipationGuide from "../components/ParticipationGuide.vue";
 
 <template>
   <div class="home-page">
+    <HeroSection />
     <div class="home-stage">
-      <div class="home-intro"><HeroSection /></div>
       <SubmissionForm />
+      <aside class="home-side">
+        <SongPreview />
+        <NoticeBoard />
+      </aside>
     </div>
-    <div class="community-grid"><SongPreview /><NoticeBoard /></div>
     <ParticipationGuide />
   </div>
 </template>

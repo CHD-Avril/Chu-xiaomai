@@ -17,7 +17,7 @@ const router = createRouter({
   history: createWebHashHistory(),
   routes,
   scrollBehavior(to, _from, savedPosition) {
-    if (to.hash) return { el: to.hash, top: 16 };
+    if (to.hash) return { el: to.hash, top: window.matchMedia("(max-width: 1023px)").matches ? 76 : 16 };
     // The song list reveals a target only after data and its page have rendered.
     if (to.name === "playlist" && (to.query.song || to.query.songTitle)) return false;
     return savedPosition || { top: 0 };

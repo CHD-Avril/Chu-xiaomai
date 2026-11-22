@@ -34,12 +34,12 @@ test("production configuration renders a direct QQ link, preserves route and nee
     assert.equal(target.searchParams.get("display"), "mobile");
     assert(!new URL(getQqAuthorizeUrl(location.href)).searchParams.has("display"));
 
-    const { default: Header } = await server.ssrLoadModule("/src/components/AppHeader.vue");
+    const { default: Header } = await server.ssrLoadModule("/src/components/QqAccountButton.vue");
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:pathMatch(.*)*", component: { template: "<div />" } }] });
     await router.push("/playlist?song=kept");
     await router.isReady();
     const html = await renderToString(createSSRApp(Header).use(createPinia()).use(router));
-    const href = /<a[^>]+class="qq-login-button"[^>]+href="([^"]+)"/.exec(html)?.[1];
+    const href = /<a[^>]+class="[^"]*qq-login-button[^"]*"[^>]+href="([^"]+)"/.exec(html)?.[1];
     assert(href, "QQ login must render a native link, not just a click handler");
     const rendered = new URL(href.replaceAll("&amp;", "&"));
     assert.equal(rendered.pathname, "/qq/authorize");

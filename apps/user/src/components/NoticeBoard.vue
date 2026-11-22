@@ -3,6 +3,7 @@ import { useAnnouncementStore } from "../stores/announcement";
 import { formatDateTime } from "../utils/format";
 import { computed, ref, watch } from "vue";
 import Pagination from "./Pagination.vue";
+import Icon from "./Icon.vue";
 
 const store = useAnnouncementStore();
 const currentPage = ref(1);
@@ -13,7 +14,13 @@ watch(pageCount, count => { currentPage.value = Math.min(currentPage.value, coun
 
 <template>
   <aside id="station-notices" class="card notice-board">
-    <div class="section-head"><h2>广播台公告</h2><span class="section-note">近期消息</span></div>
+    <div class="section-head">
+      <div>
+        <p class="section-tag">Station notices</p>
+        <h2>广播台公告</h2>
+      </div>
+      <span class="section-note">近期消息</span>
+    </div>
     <div class="notice-board-list">
       <template v-if="store.configError">
         <div class="empty-inline">公告读取失败，请稍后刷新重试。</div>
@@ -28,8 +35,11 @@ watch(pageCount, count => { currentPage.value = Math.min(currentPage.value, coun
           type="button"
           @click="store.openModal(item, 'manual')"
         >
-          <strong>{{ item.title }}</strong>
-          <time :datetime="item.created_at">{{ formatDateTime(Date.parse(item.created_at) || 0) }}</time>
+          <span class="notice-copy">
+            <strong>{{ item.title }}</strong>
+            <time :datetime="item.created_at">{{ formatDateTime(Date.parse(item.created_at) || 0) }}</time>
+          </span>
+          <Icon name="arrow-up-right" :size="15" class="notice-arrow" />
         </button>
       </template>
       <div v-else class="empty-inline">暂时还没有公告，稍后再来看看吧。</div>

@@ -4,6 +4,7 @@ import { fetchArchivedPeriods, fetchSongs } from "../services/api";
 import { formatPeriodRange } from "../utils/format";
 import Pagination from "../components/Pagination.vue";
 import SongIdentity from "../components/SongIdentity.vue";
+import Icon from "../components/Icon.vue";
 import { revealListElement } from "../utils/listNavigation";
 import { SONGS_PER_PAGE } from "../utils/pagination";
 
@@ -121,6 +122,7 @@ onMounted(refreshHistory);
   <div class="history-page">
     <header class="history-hero">
       <div>
+        <p class="section-tag">Archive</p>
         <h1>往期征集歌单</h1>
         <p>回看同学们的选择 · 已归档歌单仅供浏览</p>
       </div>
@@ -131,7 +133,7 @@ onMounted(refreshHistory);
       <details v-if="archivedPeriods.length" ref="periodSelector" class="history-period-selector">
         <summary ref="periodSelectorSummary" class="history-period-trigger">
           <span class="history-period-current"><span>当前征集期</span><strong>{{ selectedPeriod?.title || '请选择一期歌单' }}</strong></span>
-          <span class="history-period-action">切换征集期 <span aria-hidden="true">⌄</span></span>
+          <span class="history-period-action">切换征集期 <Icon name="chevron-down" :size="14" /></span>
         </summary>
         <div class="history-period-picker">
           <div class="list-pagination-top">

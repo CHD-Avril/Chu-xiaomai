@@ -25,7 +25,10 @@ async function markRead(id = null) {
 <template>
   <section class="card profile-panel" aria-labelledby="profile-title">
     <div class="section-head">
-      <h1 id="profile-title">个人中心</h1>
+      <div>
+        <p class="section-tag">Your account</p>
+        <h1 id="profile-title">个人中心</h1>
+      </div>
       <span class="profile-status" :class="{ 'is-guest': !auth.isQqLoggedIn }">{{ auth.isQqLoggedIn ? 'QQ 已登录' : '游客模式' }}</span>
     </div>
 
@@ -84,40 +87,3 @@ async function markRead(id = null) {
   </section>
 </template>
 
-<style scoped>
-.profile-panel { max-width: 720px; margin: 24px auto; }
-.section-head { align-items: center; gap: 12px; }
-h1 { margin: 0; font-size: 1.2rem; }
-.profile-status { flex-shrink: 0; padding: 6px 10px; border-radius: 4px; background: var(--accent-dim); color: var(--accent); font-size: .75rem; }
-.profile-status.is-guest { color: var(--yellow-ink); background: var(--yellow-bg); }
-.profile-summary { display: flex; align-items: center; gap: 18px; padding: 20px 0 28px; }
-.profile-avatar { display: grid; place-items: center; flex-shrink: 0; width: 76px; height: 76px; overflow: hidden; border: 1px solid var(--line); border-radius: 50%; background: var(--accent-dim); color: var(--accent); }
-.profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.profile-avatar svg { width: 44px; height: 44px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
-.profile-intro { min-width: 0; }
-.profile-intro h2 { margin: 0; font-size: 1.25rem; overflow-wrap: anywhere; }
-.profile-intro p, .profile-note p { margin: 8px 0 0; color: var(--muted); font-size: .8125rem; line-height: 1.8; }
-.profile-details { margin: 0 0 24px; border-top: 1px solid var(--line); }
-.profile-details > div { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--line); font-size: .875rem; }
-.profile-details dt { color: var(--muted); }
-.profile-details dd { margin: 0; overflow-wrap: anywhere; }
-.profile-mock { display: inline-block; margin-left: 10px; color: var(--yellow-ink); font-size: .75rem; }
-.profile-note { padding: 16px; border-left: 3px solid var(--yellow); background: var(--yellow-bg); font-size: .875rem; }
-.profile-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
-.profile-logout { min-height: 44px; margin-left: auto; }
-.site-account-id { font-size: .75rem; overflow-wrap: anywhere; }
-.account-notices { margin-top: 28px; }
-.account-notices h2 { font-size: 1rem; }
-.account-notices h2 span { font-size: .75rem; font-weight: 400; color: var(--muted); }
-.account-notice { padding: 16px 0; border-bottom: 1px solid var(--line); }
-.account-notice.is-unread { border-left: 3px solid var(--yellow); padding-left: 12px; }
-.notice-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: .875rem; }
-.notice-heading time { margin-left: auto; color: var(--muted); font-size: .75rem; }
-.unread-label { color: var(--accent); font-size: .75rem; }
-.notice-reason { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; font-size: .875rem; }
-@media (max-width: 480px) {
-  .profile-summary { gap: 14px; }
-  .profile-avatar { width: 64px; height: 64px; }
-  .profile-intro h2 { font-size: 1.1rem; }
-}
-</style>

@@ -29,17 +29,3 @@ const adminUrl = getAdminUrl();
   </footer>
 </template>
 
-<style scoped>
-.filing-link {
-  padding: 4px 8px;
-  font-size: 0.78rem;
-  line-height: 1.6;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.filing-link:hover,
-.filing-link:focus-visible {
-  color: var(--blue);
-}
-</style>

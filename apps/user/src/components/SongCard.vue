@@ -4,6 +4,7 @@ import { useSongsStore } from "../stores/songs";
 import { usePeriodStatus } from "../composables/usePeriodStatus";
 import { useAuthStore } from "../stores/auth";
 import SongIdentity from "./SongIdentity.vue";
+import Icon from "./Icon.vue";
 
 const props = defineProps({
   song: { type: Object, required: true },
@@ -58,7 +59,19 @@ async function confirmDislike() {
 </script>
 
 <template>
-  <article class="song-card" :class="{ 'is-locked': song.isLocked, 'is-highlighted': highlighted, 'is-top-three': featured }" :data-song-id="song.id" tabindex="-1">
+  <article
+    class="song-card"
+    :class="{
+      'is-locked': song.isLocked,
+      'is-highlighted': highlighted,
+      'is-top-three': featured,
+      'rank-1': featured && rank === 1,
+      'rank-2': featured && rank === 2,
+      'rank-3': featured && rank === 3,
+    }"
+    :data-song-id="song.id"
+    tabindex="-1"
+  >
     <div class="song-index">{{ String(rank).padStart(2, "0") }}</div>
     <div class="song-info">
       <SongIdentity :title="song.title" :artist="song.artist" />
@@ -79,9 +92,9 @@ async function confirmDislike() {
           :title="disabledReason || (isLiked ? '取消喜欢' : '喜欢这首歌')"
           @click="onLike"
         >
-          <span aria-hidden="true">{{ isLiked ? '♥' : '♡' }}</span>
-          <span>{{ isLiked ? '已喜欢' : '喜欢' }}</span>
-          <span>{{ song.likesCount }}</span>
+          <Icon name="heart" :size="15" />
+          <span class="vote-label">{{ isLiked ? '已喜欢' : '喜欢' }}</span>
+          <span class="vote-count">{{ song.likesCount }}</span>
         </button>
         <button
           class="vote-button vote-dislike"
@@ -94,8 +107,9 @@ async function confirmDislike() {
           :title="disabledReason || (isDisliked ? '取消点踩' : '点踩并填写理由')"
           @click="onDislike"
         >
-          <span>{{ isDisliked ? '已点踩' : '点踩' }}</span>
-          <span v-if="song.dislikesCount">{{ song.dislikesCount }}</span>
+          <Icon name="thumbs-down" :size="14" />
+          <span class="vote-label">{{ isDisliked ? '已点踩' : '点踩' }}</span>
+          <span v-if="song.dislikesCount" class="vote-count">{{ song.dislikesCount }}</span>
         </button>
       </div>
       <form v-if="showReason" class="dislike-reason" @submit.prevent="confirmDislike">
@@ -103,65 +117,19 @@ async function confirmDislike() {
         <input
           ref="reasonInput"
           v-model="reason"
+          name="dislike-reason"
           type="text"
           maxlength="20"
           placeholder="点踩理由（≤20 字）"
           aria-label="点踩理由"
           required
         />
-        <button class="primary-button compact-button" type="submit" :disabled="!canMutate || !!songsStore.dislikingSongId || !!songsStore.likingSongId">确认</button>
+        <button class="primary-button compact-button" type="submit" :disabled="!canMutate || !!songsStore.dislikingSongId || !!songsStore.likingSongId">
+          <Icon name="check" :size="13" />
+          确认
+        </button>
         <button class="primary-button secondary-btn compact-button" type="button" @click="showReason = false">取消</button>
       </form>
     </div>
   </article>
 </template>
-
-<style scoped>
-.song-side {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.dislike-reason {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.dislike-reason input {
-  width: 150px;
-  height: 44px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 0 12px;
-  font-size: 0.875rem;
-  color: var(--text);
-  background: var(--bg);
-}
-
-.dislike-reason .primary-button { min-height: 44px; }
-
-@media (max-width: 560px) {
-  .song-side {
-    align-items: stretch;
-  }
-
-  .vote-buttons {
-    justify-content: flex-end;
-  }
-
-  .dislike-reason {
-    justify-content: flex-start;
-  }
-
-  .dislike-reason input {
-    flex: 1;
-    min-width: 0;
-  }
-}
-</style>

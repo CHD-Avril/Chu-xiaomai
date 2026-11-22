@@ -78,6 +78,7 @@ function onJump(event) {
       <label class="pagination-jump-label">跳转到
       <input
         data-page-jump-input
+        name="page-jump"
         type="number"
         min="1"
         :max="pageCount"

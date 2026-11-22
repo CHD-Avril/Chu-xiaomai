@@ -10,6 +10,7 @@ import Pagination from "./Pagination.vue";
 import DailyRecommendations from "./DailyRecommendations.vue";
 import { SONGS_PER_PAGE } from "../utils/pagination";
 import ConnectionNotice from "./ConnectionNotice.vue";
+import Icon from "./Icon.vue";
 
 const songsStore = useSongsStore();
 const route = useRoute();
@@ -45,9 +46,13 @@ async function changePage(page) {
   <section class="card list-panel" :aria-busy="songsStore.isLoading">
     <div class="section-head list-head">
       <div>
+        <p class="section-tag">Live chart</p>
         <h2>{{ heading }}</h2>
       </div>
-      <button class="text-link" type="button" :disabled="songsStore.isRefreshing" @click="songsStore.refresh({ background: true })">{{ songsStore.isRefreshing ? '正在更新…' : '刷新榜单 ↻' }}</button>
+      <button class="primary-button secondary-btn compact-button" type="button" :disabled="songsStore.isRefreshing" @click="songsStore.refresh({ background: true })">
+        <Icon name="refresh" :size="14" />
+        {{ songsStore.isRefreshing ? '更新中…' : '刷新榜单' }}
+      </button>
     </div>
 
     <div class="playlist-period" role="status">
@@ -61,17 +66,21 @@ async function changePage(page) {
     <div class="controls">
       <label class="field search-field">
         <span>搜索</span>
-        <input
-          type="search"
-          maxlength="60"
-          placeholder="搜索歌曲或歌手"
-          :value="songsStore.searchTerm"
-          @input="songsStore.setSearchTerm($event.target.value)"
-        />
+        <div class="input-shell">
+          <Icon name="search" :size="16" />
+          <input
+            name="song-search"
+            type="search"
+            maxlength="60"
+            placeholder="搜索歌曲或歌手"
+            :value="songsStore.searchTerm"
+            @input="songsStore.setSearchTerm($event.target.value)"
+          />
+        </div>
       </label>
       <label class="field sort-field">
         <span>排序</span>
-        <select :value="songsStore.sortMode" @change="songsStore.setSortMode($event.target.value)">
+        <select name="song-sort" :value="songsStore.sortMode" @change="songsStore.setSortMode($event.target.value)">
           <option value="likes">喜欢数优先</option>
           <option value="time">最新投稿</option>
         </select>
@@ -91,7 +100,11 @@ async function changePage(page) {
         <span>共 {{ songsStore.visibleSongs.length }} 首<span v-if="songsStore.searchTerm">匹配歌曲</span><span v-else> · 每页 {{ SONGS_PER_PAGE }} 首</span></span>
         <Pagination compact label="榜单顶部翻页" :current-page="songsStore.currentPage" :page-count="songsStore.pageCount" :disabled="songsStore.isRefreshing" @change="changePage" />
       </div>
-      <div v-if="songsStore.isLoading" class="empty-state" role="status"><span class="loading-signal" aria-hidden="true"></span><h3 class="empty-title">正在接收歌单</h3><p class="empty-copy">马上就能看到大家的选择。</p></div>
+      <div v-if="songsStore.isLoading" class="empty-state" role="status">
+        <span class="loading-signal" aria-hidden="true"></span>
+        <h3 class="empty-title">正在接收歌单</h3>
+        <p class="empty-copy">马上就能看到大家的选择。</p>
+      </div>
       <template v-else-if="songsStore.paginatedSongs.length">
         <SongCard
           v-for="(song, index) in songsStore.paginatedSongs"
