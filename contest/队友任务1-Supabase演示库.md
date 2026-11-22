@@ -10,12 +10,12 @@
 
 ## 你需要先拿到的东西
 
-两个 SQL 文件就在**本仓库的 `sql/` 目录**下（代码仓库里对应 `Chu-xiaomai/supabase-reset-and-rebuild.sql` 和 `Chu-xiaomai/contest/demo-seed.sql`）：
+两个 SQL 文件就在**本仓库**里（`sql/` 目录不存在，别按那个路径找）：
 
-| 文件 | 用途 |
+| 文件（相对仓库根目录） | 用途 |
 |---|---|
-| `sql/supabase-reset-and-rebuild.sql` | 重建完整表结构和权限 |
-| `sql/demo-seed.sql` | 灌入演示歌单、曲库、公告 |
+| `supabase-reset-and-rebuild.sql` | 重建完整表结构和权限 |
+| `contest/demo-seed.sql` | 灌入演示歌单、曲库、公告 |
 
 ## 步骤
 
