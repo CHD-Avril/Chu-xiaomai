@@ -33,7 +33,7 @@ function handleClose() {
         <p>{{ store.currentAnnouncement.content }}</p>
       </div>
       <div class="modal-footer">
-        <button class="primary-button compact-button" type="button" @click="handleClose()">我知道了</button>
+        <button class="secondary-button compact-button" type="button" @click="handleClose()">我知道了</button>
       </div>
     </div>
   </div>

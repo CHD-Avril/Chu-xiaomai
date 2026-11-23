@@ -9,8 +9,8 @@ const SESSION_COOKIE = "chu_qq_session";
 const randomId = () => randomBytes(32).toString("hex");
 const mockProfiles = [
   { openid: "MOCK_OPENID_AVRIL_0001", nickname: "小麦君测试号", avatar: "" },
-  { openid: "MOCK_OPENID_STU_0002", nickname: "长大同学A", avatar: "" },
-  { openid: "MOCK_OPENID_STU_0003", nickname: "长大同学B", avatar: "" },
+  { openid: "MOCK_OPENID_STU_0002", nickname: "同学A", avatar: "" },
+  { openid: "MOCK_OPENID_STU_0003", nickname: "同学B", avatar: "" },
 ];
 
 export function readConfig(env = process.env) {
@@ -368,6 +368,26 @@ export function createQqServer(config, { fetchImpl = fetch, now = Date.now } = {
           target.searchParams.set("qq_error", "provider_failed");
         }
         return redirect(res, target.href);
+      }
+      // In-page mock login for local UI previews. Mock mode only, same-origin
+      // JSON requests, and never available once a real QQ app is configured.
+      if (config.mode === "mock" && req.method === "GET" && url.pathname === "/qq/mock/profiles") {
+        return json(res, 200, { accounts: mockProfiles.map(({ nickname, avatar }) => ({ nickname, avatar })) });
+      }
+      if (config.mode === "mock" && req.method === "POST" && url.pathname === "/qq/mock/login") {
+        if (req.headers.origin !== config.frontendOrigin) return json(res, 403, { error: "invalid_origin" });
+        let body;
+        try { body = await readJsonBody(req); }
+        catch (error) { return json(res, error.status || 400, { error: "invalid_request" }); }
+        const index = body.account;
+        if (!Number.isInteger(index) || index < 0 || index >= mockProfiles.length) return json(res, 400, { error: "invalid_request" });
+        if (sessions.size >= 10000) return json(res, 429, { error: "too_many_logins" });
+        sessions.delete(requestCookies[SESSION_COOKIE]);
+        const id = randomId();
+        const maxAge = Math.floor(SESSION_TTL / 1000);
+        sessions.set(id, { user: mockProfiles[index], expiresAt: now() + maxAge * 1000 });
+        res.setHeader("Set-Cookie", [setCookie(STATE_COOKIE, "", 0), setCookie(SESSION_COOKIE, id, maxAge)]);
+        return json(res, 200, { ok: true, user: mockProfiles[index], mode: "mock" });
       }
       if (config.mode === "mock" && req.method === "GET" && url.pathname === "/qq/mock") {
         const state = url.searchParams.get("state");

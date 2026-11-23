@@ -92,8 +92,8 @@ onBeforeUnmount(() => clearInterval(clock));
           <span></span><span></span><span></span><span></span><span></span>
         </span>
         <span>
-          <strong>长大小麦君</strong>
-          <small>CHU BROADCAST</small>
+          <strong>小麦点歌台</strong>
+          <small>XIAOMAI RADIO</small>
         </span>
       </div>
       <el-menu :default-active="activeView" @select="selectView">

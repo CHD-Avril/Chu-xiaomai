@@ -1,11 +1,13 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useAuthStore } from "../stores/auth";
+import { useQqLoginModal } from "../composables/useQqLoginModal";
 import qqLoginIcon from "../assets/qq-login-icon.png";
 import { ACCOUNT_ACTION_LABELS, TIMED_ACCOUNT_ACTIONS } from "../../../shared/accountModeration";
 import { formatDateTime } from "../utils/format";
 
 const auth = useAuthStore();
+const { openQqLogin } = useQqLoginModal();
 const avatarFailed = ref(false);
 const readingNotice = ref(false), noticeError = ref("");
 const nickname = computed(() => auth.qqUser?.nickname || "QQ 用户");
@@ -78,7 +80,7 @@ async function markRead(id = null) {
     </section>
 
     <div class="profile-actions">
-      <button v-if="!auth.isQqLoggedIn" class="primary-button" type="button" :disabled="auth.qqBusy" @click="auth.qqLogin()">
+      <button v-if="!auth.isQqLoggedIn" class="primary-button" type="button" :disabled="auth.qqBusy" @click="openQqLogin()">
         <img :src="qqLoginIcon" width="16" height="16" alt="" aria-hidden="true" />QQ 登录
       </button>
       <router-link class="primary-button secondary-btn" to="/playlist">查看榜单 ↗</router-link>

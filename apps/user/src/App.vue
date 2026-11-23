@@ -7,7 +7,7 @@ import { useSongsStore } from "./stores/songs";
 import { useAnnouncementStore } from "./stores/announcement";
 import AppLayout from "./layouts/AppLayout.vue";
 import AnnouncementModal from "./components/AnnouncementModal.vue";
-import IdentityNotice from "./components/IdentityNotice.vue";
+import QqLoginModal from "./components/QqLoginModal.vue";
 import TestModeAccess from "./components/TestModeAccess.vue";
 import AccountNotice from "./components/AccountNotice.vue";
 import { supabase } from "./services/supabase";
@@ -99,11 +99,11 @@ onMounted(async () => {
 
 <template>
   <AppLayout>
-    <IdentityNotice v-if="route.path !== '/me'" />
     <AccountNotice v-if="route.path !== '/me'" />
     <TestModeAccess v-if="periodStore.currentPeriod?.isTest && route.path !== '/me'" />
     <router-view v-if="!testLocked || route.path === '/history' || route.path === '/me'" :key="authStore.isTester ? authStore.testUser?.id : 'visitor'" />
   </AppLayout>
 
   <AnnouncementModal />
+  <QqLoginModal />
 </template>

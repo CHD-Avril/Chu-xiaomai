@@ -19,6 +19,7 @@ const locatedSongId = ref("");
 let locatedKey = "";
 const { period, status } = usePeriodStatus();
 const heading = computed(() => status.value.label === "本期已结束" ? "本期歌单结果" : "本期点歌榜单");
+const maxLikes = computed(() => songsStore.songs.reduce((max, song) => Math.max(max, song.likesCount || 0), 0));
 const hasTarget = computed(() => typeof route.query.song === "string" || (typeof route.query.songTitle === "string" && typeof route.query.songArtist === "string"));
 const targetSong = computed(() => {
   if (route.query.period && route.query.period !== period.value?.id) return null;
@@ -106,6 +107,12 @@ async function changePage(page) {
         <p class="empty-copy">马上就能看到大家的选择。</p>
       </div>
       <template v-else-if="songsStore.paginatedSongs.length">
+        <div class="chart-columns" aria-hidden="true">
+          <span>序号</span>
+          <span>歌曲</span>
+          <span>人气</span>
+          <span>操作</span>
+        </div>
         <SongCard
           v-for="(song, index) in songsStore.paginatedSongs"
           :key="song.id"
@@ -113,6 +120,7 @@ async function changePage(page) {
           :rank="(songsStore.currentPage - 1) * SONGS_PER_PAGE + index + 1"
           :featured="songsStore.sortMode === 'likes' && !songsStore.searchTerm && songsStore.currentPage === 1 && index < 3"
           :highlighted="song.id === locatedSongId"
+          :max-likes="maxLikes"
         />
       </template>
       <div v-else-if="!songsStore.errorMessage" class="empty-state">

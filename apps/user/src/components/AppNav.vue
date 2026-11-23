@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from "vue";
 import { useRoute } from "vue-router";
 import Icon from "./Icon.vue";
 
@@ -10,10 +11,12 @@ const items = [
   { to: "/history", label: "往期", icon: "history" },
   { to: "/me", label: "我的", icon: "user" },
 ];
+const activeIndex = computed(() => Math.max(0, items.findIndex((item) => isActive(item.to))));
 </script>
 
 <template>
-  <nav class="site-nav" aria-label="页面导航">
+  <nav class="site-nav" :style="{ '--nav-index': activeIndex }" aria-label="页面导航">
+    <span class="site-nav-indicator" aria-hidden="true"></span>
     <router-link
       v-for="item in items"
       :key="item.to"

@@ -37,7 +37,7 @@ async function logout() {
       <form class="test-login-form" @submit.prevent="login">
         <label class="field"><span>测试账号邮箱</span><input v-model="email" name="test-email" type="email" autocomplete="username" required :disabled="busy" placeholder="运营人员提供的账号邮箱" /></label>
         <label class="field"><span>密码</span><input v-model="password" name="test-password" type="password" autocomplete="current-password" required :disabled="busy" /></label>
-        <button class="primary-button" type="submit" :disabled="busy">{{ busy ? '正在登录…' : '登录测试账号' }}</button>
+        <button class="secondary-button" type="submit" :disabled="busy">{{ busy ? '正在登录…' : '登录测试账号' }}</button>
       </form>
       <p class="section-note">没有测试账号？请联系运营人员。正常征集期仍可免登录参与。</p>
     </template>

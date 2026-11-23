@@ -94,7 +94,7 @@ async function closeAnnouncement(item) {
     <p class="muted">显示最近 100 条公告记录。</p>
   </el-card>
   <el-dialog v-model="preview" title="公告预览" width="min(600px, 94vw)" :close-on-click-modal="false" :show-close="!publishing" :close-on-press-escape="!publishing">
-    <article class="announcement-preview"><span class="preview-kicker">CHU BROADCAST / 公告</span><h2>{{ form.title.trim() || '公告标题' }}</h2><p>{{ form.content.trim() || '请填写公告内容' }}</p></article>
+    <article class="announcement-preview"><span class="preview-kicker">XIAOMAI RADIO / 公告</span><h2>{{ form.title.trim() || '公告标题' }}</h2><p>{{ form.content.trim() || '请填写公告内容' }}</p></article>
     <p class="muted">保存后{{ form.editingId ? '更新原公告内容，保持其展示状态。' : '立即在前台展示。' }}</p>
     <template #footer><el-button :disabled="publishing" @click="preview = false">返回编辑</el-button><el-button type="primary" :loading="publishing" @click="publish">{{ form.editingId ? '确认保存' : '确认发布' }}</el-button></template>
   </el-dialog>

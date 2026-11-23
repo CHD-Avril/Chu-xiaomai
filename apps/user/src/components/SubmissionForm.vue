@@ -32,24 +32,17 @@ async function submit() { if (selected.value && await songs.submitSong(selected.
         <p class="section-tag">Request a song</p>
         <h2>今天，你想听什么？</h2>
       </div>
-      <span class="no-login-note">
-        <Icon :name="auth.isQqLoggedIn ? 'check' : 'user'" :size="13" />
-        {{ auth.isQqLoggedIn ? 'QQ 已登录' : 'QQ 登录后可投稿' }}
-      </span>
     </div>
 
-    <div class="submission-period-card">
+    <p class="request-status" role="status">
       <span class="period-state-chip" :class="status.className">{{ status.label }}</span>
-      <div>
-        <strong>{{ period?.title || '校园点歌征集' }}</strong>
-        <p>{{ status.copy }}</p>
-      </div>
-    </div>
+      <span>{{ period?.title || '校园点歌征集' }} · {{ status.copy }}</span>
+    </p>
 
     <ConnectionNotice />
     <p class="section-note">从广播台确认音源的曲库中选择，本期节目选曲范围内的歌曲会显示在这里。</p>
 
-    <label class="field">
+    <label class="field search-field">
       <span>搜索歌名或歌手</span>
       <div class="input-shell">
         <Icon name="search" :size="16" />
@@ -65,9 +58,9 @@ async function submit() { if (selected.value && await songs.submitSong(selected.
     <p v-else-if="songs.isLoading" class="empty-inline" role="status">正在读取曲库…</p>
     <template v-else>
       <div class="catalog-results" aria-label="可播歌曲">
-        <article v-for="song in visible" :key="song.id" class="catalog-row" :class="{ selected: selected?.id === song.id }">
+        <article v-for="(song, index) in visible" :key="song.id" class="catalog-row" :class="{ selected: selected?.id === song.id }">
           <div class="catalog-main">
-            <span class="catalog-disc" aria-hidden="true"><Icon name="music" :size="14" /></span>
+            <span class="catalog-code" aria-hidden="true">A{{ (page - 1) * 8 + index + 1 }}</span>
             <div>
               <strong>{{ song.title }}</strong>
               <p>
@@ -78,8 +71,8 @@ async function submit() { if (selected.value && await songs.submitSong(selected.
           <button v-if="requested(song)" class="text-link" type="button" @click="locate(requested(song).id)">已有人点 · 去支持</button>
           <button
             v-else
-            class="primary-button compact-button"
-            :class="{ 'secondary-btn': selected?.id === song.id }"
+            class="select-button"
+            :class="{ 'is-selected': selected?.id === song.id }"
             type="button"
             :disabled="songs.isSubmitting || !auth.isQqLoggedIn"
             :aria-pressed="selected?.id === song.id"
@@ -101,7 +94,7 @@ async function submit() { if (selected.value && await songs.submitSong(selected.
     <form class="song-form" @submit.prevent="submit">
       <p v-if="selected">已选：{{ selected.title }} · {{ selected.artist }}</p>
       <p v-else-if="drafts.draft.catalogId">原选择已不在本期可点范围，请重新选择。</p>
-      <button class="primary-button" type="submit" :disabled="!songs.canSubmit || !selected || !!songs.catalogError || songs.isSubmitting">
+      <button class="secondary-button" type="submit" :disabled="!songs.canSubmit || !selected || !!songs.catalogError || songs.isSubmitting">
         {{ !auth.isQqLoggedIn ? 'QQ 登录后可投稿' : songs.isSubmitting ? '正在投递…' : '提交这首歌' }}
         <Icon v-if="auth.isQqLoggedIn && !songs.isSubmitting" name="arrow-up-right" :size="16" />
       </button>

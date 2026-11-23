@@ -205,6 +205,8 @@ test("unconfigured real mode never falls back to fake accounts; blocks open redi
   const { request } = await setup(t);
   assert.deepEqual(await (await request("/qq/session")).json(), { user: null, mode: "real", configured: false });
   assert.equal((await request("/qq/mock")).status, 404);
+  assert.equal((await request("/qq/mock/profiles")).status, 404);
+  assert.equal((await request("/qq/mock/login", { method: "POST", body: { account: 0 } })).status, 404);
   for (const target of ["https://evil.example", "//evil.example", "/qq/callback", "https://user@localhost:5173/"]) {
     assert.equal((await request(`/qq/authorize?return_to=${encodeURIComponent(target)}`)).status, 400);
   }
@@ -226,12 +228,26 @@ test("mock goes through callback, restores a server session, preserves page, and
   assert.match(completed.headers.getSetCookie().join(";"), /SameSite=Lax/);
   const sessionCookie = new Map(jar);
   const profile = await (await request("/qq/session")).json();
-  assert.equal(profile.user.nickname, "长大同学A");
+  assert.equal(profile.user.nickname, "同学A");
   assert.equal(profile.mode, "mock");
   assert.equal((await request("/qq/logout", { method: "POST" })).status, 403);
   assert.equal((await request("/qq/logout", { method: "POST", origin: config.frontendOrigin })).status, 200);
   assert.equal((await (await request("/qq/session", { cookies: sessionCookie })).json()).user, null);
   assert.equal(new URL((await request(callback)).headers.get("location")).searchParams.get("qq_error"), "invalid_state");
+});
+
+test("mock accounts log in from the in-page dialog without leaving the site", async (t) => {
+  const { request, config } = await setup(t, { env: { QQ_AUTH_MODE: "mock" } });
+  const profiles = await (await request("/qq/mock/profiles")).json();
+  assert.deepEqual(profiles.accounts.map((account) => account.nickname), ["小麦君测试号", "同学A", "同学B"]);
+  assert.equal((await request("/qq/mock/login", { method: "POST", body: { account: 1 } })).status, 403);
+  assert.equal((await request("/qq/mock/login", { method: "POST", origin: config.frontendOrigin, body: { account: "1" } })).status, 400);
+  assert.equal((await request("/qq/mock/login", { method: "POST", origin: config.frontendOrigin, body: { account: 3 } })).status, 400);
+  const login = await request("/qq/mock/login", { method: "POST", origin: config.frontendOrigin, body: { account: 1 } });
+  assert.equal(login.status, 200);
+  assert.match(login.headers.getSetCookie().join(";"), /HttpOnly/);
+  assert.match(login.headers.getSetCookie().join(";"), /SameSite=Lax/);
+  assert.equal((await (await request("/qq/session")).json()).user.nickname, "同学A");
 });
 
 test("real QQ exchanges code only on server, checks client id, normalizes profile and never leaks secrets", async (t) => {

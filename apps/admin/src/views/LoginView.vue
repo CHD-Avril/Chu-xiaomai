@@ -37,10 +37,10 @@ async function handleLogin() {
         <span class="login-brand-mark" aria-hidden="true">
           <span></span><span></span><span></span><span></span><span></span>
         </span>
-        <strong>长大小麦君</strong>
+        <strong>小麦点歌台</strong>
       </div>
       <h1>运营管理台</h1>
-      <p class="login-sub">长安大学广播台 · 歌单征集管理后台</p>
+      <p class="login-sub">校园广播 · 歌单征集管理后台</p>
 
       <el-form @submit.prevent="handleLogin">
         <el-form-item>

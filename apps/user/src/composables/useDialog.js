@@ -13,6 +13,11 @@ export function useDialog(visible, close) {
     const elements = focusable();
     const first = elements[0];
     const last = elements.at(-1);
+    if (document.activeElement === dialog.value) {
+      event.preventDefault();
+      if (elements.length) (event.shiftKey ? last : first).focus();
+      return;
+    }
     if (!first) { event.preventDefault(); dialog.value?.focus(); return; }
     if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
@@ -34,7 +39,7 @@ export function useDialog(visible, close) {
     document.body.style.overflow = "hidden";
     document.addEventListener("keydown", onKey);
     await nextTick();
-    if (active) (focusable()[0] ?? dialog.value)?.focus();
+    if (active) (dialog.value ?? focusable()[0])?.focus();
   }, { immediate: true, flush: "post" });
   onBeforeUnmount(cleanup);
   return dialog;

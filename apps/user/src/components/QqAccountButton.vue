@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { getQqAuthorizeUrl, qqEnabled } from "../services/qq";
+import { useQqLoginModal } from "../composables/useQqLoginModal";
 import qqLoginIcon from "../assets/qq-login-icon.png";
 import Icon from "./Icon.vue";
 
@@ -12,6 +13,7 @@ const props = defineProps({
 
 const auth = useAuthStore();
 const route = useRoute();
+const { openQqLogin } = useQqLoginModal();
 const isCompact = computed(() => props.variant === "compact");
 const qqLoginHref = computed(() => {
   const returnTo = new URL(location.href);
@@ -54,6 +56,7 @@ const qqLoginHref = computed(() => {
       :class="isCompact ? 'is-compact' : 'is-full'"
       :href="qqLoginHref"
       aria-label="QQ 登录"
+      @click.prevent="openQqLogin()"
     >
       <img :src="qqLoginIcon" width="16" height="16" alt="" aria-hidden="true" />
       <span>QQ 登录</span>
@@ -65,7 +68,7 @@ const qqLoginHref = computed(() => {
       type="button"
       aria-label="QQ 登录"
       :disabled="auth.qqBusy"
-      @click="auth.qqLogin()"
+      @click="openQqLogin()"
     >
       <img :src="qqLoginIcon" width="16" height="16" alt="" aria-hidden="true" />
       <span>QQ 登录</span>
