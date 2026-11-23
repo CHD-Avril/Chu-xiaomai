@@ -77,6 +77,7 @@ const periodStatus = computed(() => {
     <el-card class="panel-card" shadow="never">
       <template #header>待办提醒</template>
       <div class="toolbar quick-actions">
+        <el-button type="primary" plain @click="emit('navigate', 'periods', 'daily')">快捷设置征集</el-button>
         <el-button type="primary" @click="emit('navigate', 'reports')">审核举报（{{ reportCount }}）</el-button>
         <el-button @click="emit('navigate', 'periods', period ? 'edit' : 'create')">{{ period ? '调整截止时间' : '新建征集期' }}</el-button>
         <el-button @click="emit('navigate', 'announcements')">发布公告</el-button>

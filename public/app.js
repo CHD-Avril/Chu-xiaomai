@@ -1606,7 +1606,7 @@ function buildExportText() {
   const lines = exportSongs.map((song, index) => `${index + 1}. ${song.title} - ${song.artist}（喜欢 ${song.likesCount || 0}）`);
 
   return [
-    "长大小麦君歌单导出",
+    "小麦点歌台歌单导出",
     `征集期：${period?.title || "未选择征集期"}`,
     `时间：${period ? formatPeriodRange(period) : "无"}`,
     `排序：${orderLabel}`,

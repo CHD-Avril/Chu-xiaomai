@@ -9,8 +9,8 @@ const SESSION_COOKIE = "chu_qq_session";
 const randomId = () => randomBytes(32).toString("hex");
 const mockProfiles = [
   { openid: "MOCK_OPENID_AVRIL_0001", nickname: "小麦君测试号", avatar: "" },
-  { openid: "MOCK_OPENID_STU_0002", nickname: "长大同学A", avatar: "" },
-  { openid: "MOCK_OPENID_STU_0003", nickname: "长大同学B", avatar: "" },
+  { openid: "MOCK_OPENID_STU_0002", nickname: "同学A", avatar: "" },
+  { openid: "MOCK_OPENID_STU_0003", nickname: "同学B", avatar: "" },
 ];
 
 export function readConfig(env = process.env) {
@@ -142,10 +142,9 @@ function participationParams(body) {
   if (!["votes", "submit", "like", "dislike"].includes(body.operation) || !uuidPattern.test(body.periodId || "")) throw participationError("invalid_request");
   const params = { p_operation: body.operation, p_period_id: body.periodId };
   if (body.operation === "submit") {
-    for (const field of ["title", "artist"]) {
-      if (typeof body[field] !== "string" || !body[field].trim() || [...body[field].trim()].length > 80) throw participationError("invalid_request");
-      params[`p_${field}`] = body[field].trim();
-    }
+    if (!uuidPattern.test(body.catalogId || "")) throw participationError("invalid_request");
+    // The shared gateway uses song_id as the catalog ID only for submit.
+    params.p_song_id = body.catalogId;
   } else if (["like", "dislike"].includes(body.operation)) {
     if (!uuidPattern.test(body.songId || "") || !["on", "off"].includes(body.action)) throw participationError("invalid_request");
     params.p_song_id = body.songId;
@@ -261,7 +260,11 @@ export function createQqServer(config, { fetchImpl = fetch, now = Date.now } = {
           const moderation = await fetchImpl(new URL("/rest/v1/rpc/qq_moderation_health", config.databaseUrl), {
             method: "POST", headers, signal: AbortSignal.timeout(10000), redirect: "error", body: "{}",
           });
-          return moderation.ok && (await moderation.json()).ok === true;
+          if (!moderation.ok || (await moderation.json()).ok !== true) return false;
+          const catalog = await fetchImpl(new URL("/rest/v1/rpc/qq_catalog_health", config.databaseUrl), {
+            method: "POST", headers, signal: AbortSignal.timeout(10000), redirect: "error", body: "{}",
+          });
+          return catalog.ok && (await catalog.json()).ok === true;
         } catch { return false; }
       })() };
     }
@@ -365,6 +368,26 @@ export function createQqServer(config, { fetchImpl = fetch, now = Date.now } = {
           target.searchParams.set("qq_error", "provider_failed");
         }
         return redirect(res, target.href);
+      }
+      // In-page mock login for local UI previews. Mock mode only, same-origin
+      // JSON requests, and never available once a real QQ app is configured.
+      if (config.mode === "mock" && req.method === "GET" && url.pathname === "/qq/mock/profiles") {
+        return json(res, 200, { accounts: mockProfiles.map(({ nickname, avatar }) => ({ nickname, avatar })) });
+      }
+      if (config.mode === "mock" && req.method === "POST" && url.pathname === "/qq/mock/login") {
+        if (req.headers.origin !== config.frontendOrigin) return json(res, 403, { error: "invalid_origin" });
+        let body;
+        try { body = await readJsonBody(req); }
+        catch (error) { return json(res, error.status || 400, { error: "invalid_request" }); }
+        const index = body.account;
+        if (!Number.isInteger(index) || index < 0 || index >= mockProfiles.length) return json(res, 400, { error: "invalid_request" });
+        if (sessions.size >= 10000) return json(res, 429, { error: "too_many_logins" });
+        sessions.delete(requestCookies[SESSION_COOKIE]);
+        const id = randomId();
+        const maxAge = Math.floor(SESSION_TTL / 1000);
+        sessions.set(id, { user: mockProfiles[index], expiresAt: now() + maxAge * 1000 });
+        res.setHeader("Set-Cookie", [setCookie(STATE_COOKIE, "", 0), setCookie(SESSION_COOKIE, id, maxAge)]);
+        return json(res, 200, { ok: true, user: mockProfiles[index], mode: "mock" });
       }
       if (config.mode === "mock" && req.method === "GET" && url.pathname === "/qq/mock") {
         const state = url.searchParams.get("state");

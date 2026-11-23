@@ -25,6 +25,15 @@ export async function fetchSongs(periodId) {
   return mapSongs(data);
 }
 
+export async function fetchSongCatalog(periodId) {
+  const rows = [];
+  for (let offset = 0; ; offset += 500) {
+    const data = await readRequest("读取可播歌曲", signal => supabase.rpc("get_song_catalog", { p_period_id: periodId }).range(offset, offset + 499).abortSignal(signal));
+    rows.push(...(data ?? []));
+    if (!data || data.length < 500) return rows;
+  }
+}
+
 async function participate(operation, values, isTest) {
   const headers = { "Content-Type": "application/json" };
   if (isTest) {
@@ -41,8 +50,8 @@ export async function fetchMyVotes(periodId, isTest = false) {
   return readRequest("读取个人投票记录", async () => ({ data: await participate("votes", { periodId }, isTest) }));
 }
 
-export async function submitSong({ title, artist, playlistDate, isTest }) {
-  return participate("submit", { title, artist, periodId: playlistDate }, isTest);
+export async function submitSong({ catalogId, playlistDate, isTest }) {
+  return participate("submit", { catalogId, periodId: playlistDate }, isTest);
 }
 
 export async function toggleLike({ songId, playlistDate, isTest, action }) {

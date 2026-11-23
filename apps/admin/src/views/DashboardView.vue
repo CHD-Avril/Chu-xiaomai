@@ -9,19 +9,22 @@ import "element-plus/es/components/main/style/css";
 import "element-plus/es/components/menu/style/css";
 import "element-plus/es/components/menu-item/style/css";
 import "element-plus/es/components/tag/style/css";
-import { computed, defineAsyncComponent, onMounted, onBeforeUnmount } from "vue";
+import { computed, defineAsyncComponent, onMounted, onBeforeUnmount, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { useAdminStore } from "../stores/admin";
 import OverviewPanel from "../components/OverviewPanel.vue";
+import DailyPeriodDialog from "../components/DailyPeriodDialog.vue";
 
 const authStore = useAuthStore();
 const adminStore = useAdminStore();
 const router = useRouter();
 const route = useRoute();
+const dailyPeriodDialog = ref(null);
 
 const activeView = computed(() => Object.hasOwn(viewComponents, route.query.view) ? route.query.view : "overview");
 function selectView(view, action) {
+  if (action === "daily") { dailyPeriodDialog.value?.open(); return; }
   router.replace({ query: { ...route.query, view, action: typeof action === "string" ? action : undefined } });
 }
 const frontendUrl = import.meta.env.VITE_USER_URL || (import.meta.env.DEV ? `${location.protocol}//${location.hostname}:5173/` : new URL("/", location.origin).href);
@@ -42,6 +45,7 @@ const viewComponents = {
   announcements: defineAsyncComponent(() => import("../components/AnnouncementManage.vue")),
   anticheat: defineAsyncComponent(() => import("../components/AntiCheatPanel.vue")),
   automod: defineAsyncComponent(() => import("../components/AutoModerationPanel.vue")),
+  catalog: defineAsyncComponent(() => import("../components/SongCatalogPanel.vue")),
   export: defineAsyncComponent(() => import("../components/ExportPanel.vue")),
 };
 
@@ -55,6 +59,7 @@ const viewTitles = {
   announcements: "公告管理",
   anticheat: "防作弊明细",
   automod: "自动审核",
+  catalog: "音源曲库",
   export: "播出歌单与导出",
 };
 
@@ -87,8 +92,8 @@ onBeforeUnmount(() => clearInterval(clock));
           <span></span><span></span><span></span><span></span><span></span>
         </span>
         <span>
-          <strong>长大小麦君</strong>
-          <small>CHU BROADCAST</small>
+          <strong>小麦点歌台</strong>
+          <small>XIAOMAI RADIO</small>
         </span>
       </div>
       <el-menu :default-active="activeView" @select="selectView">
@@ -101,6 +106,7 @@ onBeforeUnmount(() => clearInterval(clock));
         <el-menu-item index="announcements">公告</el-menu-item>
         <el-menu-item index="anticheat">防作弊明细</el-menu-item>
         <el-menu-item index="automod">自动审核</el-menu-item>
+        <el-menu-item index="catalog">音源曲库</el-menu-item>
         <el-menu-item index="export">播出歌单与导出</el-menu-item>
       </el-menu>
     </el-aside>
@@ -129,4 +135,5 @@ onBeforeUnmount(() => clearInterval(clock));
       </el-main>
     </el-container>
   </el-container>
+  <DailyPeriodDialog ref="dailyPeriodDialog" @navigate="selectView" />
 </template>

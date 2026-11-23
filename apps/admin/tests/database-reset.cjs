@@ -42,7 +42,7 @@ async function identity(db, id, email) {
 }
 async function assertEmptyBusiness(db, adminExpected=1) {
   await db.exec('reset role');
-  for(const table of ['songs','song_likes','song_dislikes','song_reports','playlist_periods','announcements','vote_attempts','api_request_attempts','admin_action_log','broadcast_playlists','database_repair_archive','test_accounts'])
+  for(const table of ['songs','song_likes','song_dislikes','song_reports','playlist_periods','announcements','vote_attempts','api_request_attempts','admin_action_log','broadcast_playlists','database_repair_archive','test_accounts','period_catalog_policies'])
     assert.equal((await one(db,'select count(*)::int n from '+table)).n,0,table+' was not cleared');
   assert.equal((await one(db,'select count(*)::int n from security_settings')).n,1);
   assert.equal((await one(db,'select count(*)::int n from auth.users')).n,2);
@@ -104,9 +104,12 @@ async function assertMaintenanceConcurrency(db, reset) {
   await identity(db,null,null);await assert.rejects(db.query("select * from submit_song('匿名越权','歌手',$1,$2)",[period,tester]),/permission denied/);
   await identity(db,tester,'tester@example.invalid');
   await assert.rejects(db.query("select * from submit_song('测试账号也须QQ登录','歌手',$1,$2)",[period,tester]),/permission denied/);
+  await db.exec('reset role');
+  await identity(db,admin,'admin@example.invalid');
+  const catalogId=(await one(db,"select admin_upsert_song_catalog(null,'新测试歌曲','测试员','studio:test',200,true,true,'') id")).id;
   await db.exec('reset role; set role service_role');
   const participate=async(operation,songId=null) => (await one(db,"select qq_participate('1905775107','RESET_QQ_ACCOUNT','测试员','',$1,$2,$3,'新测试歌曲','测试员','on',null,$4) result",[operation,period,songId,tester])).result;
-  const song=await participate('submit');assert(song.id);assert.equal(song.error_code,null);
+  const song=await participate('submit',catalogId);assert(song.id);assert.equal(song.error_code,null);
   assert.equal((await participate('like',song.id)).liked,true);
   await db.exec('reset role');
   const qqId=(await one(db,"select id from qq_accounts where openid='RESET_QQ_ACCOUNT'")).id;
@@ -114,6 +117,7 @@ async function assertMaintenanceConcurrency(db, reset) {
   await db.query("select admin_moderate_account($1,'ban','重建后仍应生效',null,0)",[qqId]);
   await identity(db,null,null);assert.equal((await one(db,'select count(*)::int n from songs')).n,0);
   await db.exec('reset role');await db.exec(reset);await assertEmptyBusiness(db);
+  assert.equal((await one(db,'select count(*)::int n from song_catalog where id=$1',[catalogId])).n,1,'Reset preserves catalog');
   assert.equal((await one(db,"select id from qq_accounts where openid='RESET_QQ_ACCOUNT'")).id,qqId,'Reset must preserve durable QQ identity');
   assert.equal((await one(db,'select qq_moderation_state($1) state',[qqId])).state.banned,true,'Reset must not erase existing bans');
   assert.equal((await one(db,'select count(*)::int n from account_moderation_actions where account_id=$1',[qqId])).n,1);

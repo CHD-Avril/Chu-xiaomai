@@ -4,6 +4,29 @@ import { fileURLToPath } from "node:url";
 import { createServer as createHttpServer } from "node:http";
 import { createServer } from "vite";
 
+test('daily collection API sends date/time and exact version, and explains a missing migration', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = []; let server, missing = false;
+  globalThis.fetch = async (input, options = {}) => {
+    assert.equal(new URL(String(input)).pathname, '/rest/v1/rpc/admin_prepare_daily_period');
+    calls.push(JSON.parse(options.body));
+    return missing ? Response.json({ code: 'PGRST202', message: 'function missing' }, { status: 404 }) : Response.json({ id: 'new-id', created: true });
+  };
+  try {
+    server = await createServer({ root: fileURLToPath(new URL('..', import.meta.url)), server: { middlewareMode: true, hmr: { server: createHttpServer() } }, appType: 'custom' });
+    const api = await server.ssrLoadModule('/src/services/api.js');
+    const updatedAt = '2026-11-06T10:00:00.123456+00:00';
+    const current = api.normalizePeriod({ id: 'old-id', updated_at: updatedAt });
+    const draft = { date: '2026-11-07', title: ' 11月7日歌单征集 ', startTime: '00:00', endTime: '18:00' };
+    assert.deepEqual(await api.prepareDailyPeriod(draft, current), { id: 'new-id', created: true });
+    assert.deepEqual(calls[0], { p_target_date: '2026-11-07', p_title: '11月7日歌单征集', p_start_time: '00:00', p_end_time: '18:00', p_expected_current_id: 'old-id', p_expected_updated_at: updatedAt });
+    await api.prepareDailyPeriod(draft, null);
+    assert.equal(calls[1].p_expected_current_id, null); assert.equal(calls[1].p_expected_updated_at, null);
+    missing = true;
+    await assert.rejects(api.prepareDailyPeriod(draft, current), /supabase-daily-period.sql/);
+  } finally { globalThis.fetch = originalFetch; await server?.close(); }
+});
+
 test("participation settings API reads actual values, updates only quotas, prevents stale writes and surfaces permission failures", async () => {
   const originalFetch=globalThis.fetch;
   let server, denied=false;

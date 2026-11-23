@@ -21,6 +21,7 @@ test("real API/store flow reports the failing read, recovers, preserves stale da
     let data;
     if (name === "playlist_periods") data = [{ id: "period", title: "本期", status: "active", starts_at: "2020-01-01", ends_at: "2099-01-01", is_test: isTest }];
     else if (name === "songs") data = [{ id: "song", title: "晴天", artist: "周杰伦" }];
+    else if (name === "get_song_catalog") data = [{ id: "catalog-song", title: "晴天", artist: "周杰伦", duration_seconds: 269 }];
     else if (["get_my_likes", "get_my_dislikes"].includes(name)) data = [];
     else if (name === "participate") data = { likes: [], dislikes: [] };
     else if (name === "is_current_user_tester") data = testerAllowed;

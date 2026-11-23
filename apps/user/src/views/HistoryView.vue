@@ -4,6 +4,7 @@ import { fetchArchivedPeriods, fetchSongs } from "../services/api";
 import { formatPeriodRange } from "../utils/format";
 import Pagination from "../components/Pagination.vue";
 import SongIdentity from "../components/SongIdentity.vue";
+import Icon from "../components/Icon.vue";
 import { revealListElement } from "../utils/listNavigation";
 import { SONGS_PER_PAGE } from "../utils/pagination";
 
@@ -29,6 +30,12 @@ const paginatedPeriods = computed(() => {
   return archivedPeriods.value.slice(start, start + PERIODS_PER_PAGE);
 });
 const totalLikes = computed(() => historySongs.value.reduce((sum, song) => sum + (song.likesCount || 0), 0));
+const maxLikes = computed(() => historySongs.value.reduce((max, song) => Math.max(max, song.likesCount || 0), 0));
+function vuLit(likes) {
+  if (!likes) return 0;
+  const max = Math.max(maxLikes.value, likes);
+  return Math.min(5, Math.max(1, Math.round((likes / max) * 5)));
+}
 const pageCount = computed(() => Math.max(1, Math.ceil(historySongs.value.length / SONGS_PER_PAGE)));
 const paginatedSongs = computed(() => {
   const start = (currentPage.value - 1) * SONGS_PER_PAGE;
@@ -121,6 +128,7 @@ onMounted(refreshHistory);
   <div class="history-page">
     <header class="history-hero">
       <div>
+        <p class="section-tag">Archive</p>
         <h1>往期征集歌单</h1>
         <p>回看同学们的选择 · 已归档歌单仅供浏览</p>
       </div>
@@ -131,7 +139,7 @@ onMounted(refreshHistory);
       <details v-if="archivedPeriods.length" ref="periodSelector" class="history-period-selector">
         <summary ref="periodSelectorSummary" class="history-period-trigger">
           <span class="history-period-current"><span>当前征集期</span><strong>{{ selectedPeriod?.title || '请选择一期歌单' }}</strong></span>
-          <span class="history-period-action">切换征集期 <span aria-hidden="true">⌄</span></span>
+          <span class="history-period-action">切换征集期 <Icon name="chevron-down" :size="14" /></span>
         </summary>
         <div class="history-period-picker">
           <div class="list-pagination-top">
@@ -169,7 +177,7 @@ onMounted(refreshHistory);
           <div class="readonly-table-header" aria-hidden="true">
             <span>序号</span>
             <span>歌曲 / 歌手</span>
-            <span>喜欢</span>
+            <span>人气</span>
           </div>
           <article
             v-for="(song, index) in paginatedSongs"
@@ -178,7 +186,12 @@ onMounted(refreshHistory);
           >
             <div class="song-index">{{ String((currentPage - 1) * SONGS_PER_PAGE + index + 1).padStart(2, "0") }}</div>
             <SongIdentity :title="song.title" :artist="song.artist" />
-            <div class="song-like-count">{{ song.likesCount || 0 }}</div>
+            <div class="song-meter" :title="`本期人气：${song.likesCount || 0} 次喜欢`">
+              <span class="vu-meter" aria-hidden="true">
+                <i v-for="n in 5" :key="n" :class="{ 'is-lit': n <= vuLit(song.likesCount || 0) }"></i>
+              </span>
+              <span class="vu-count"><span class="visually-hidden">喜欢 </span>{{ song.likesCount || 0 }}</span>
+            </div>
           </article>
         </template>
         <div v-else-if="!statusError" class="empty-state">

@@ -3,6 +3,7 @@ import { useAuthStore } from "./auth";
 import { usePeriodStore } from "./period";
 import {
   fetchSongs,
+  fetchSongCatalog,
   fetchMyVotes,
   submitSong,
   toggleLike,
@@ -31,6 +32,8 @@ function getDailyRecommendationKey(period, song) {
 export const useSongsStore = defineStore("songs", {
   state: () => ({
     songs: [],
+    catalogSongs: [],
+    catalogError: "",
     searchTerm: "",
     sortMode: "likes",
     currentPage: 1,
@@ -169,8 +172,9 @@ export const useSongsStore = defineStore("songs", {
       const account = authStore.qqUser?.openid;
       const tester = authStore.testUser?.id;
       // Failed/expired personal sessions must not prevent public browsing.
-      const [songs, votes] = await Promise.all([
+      const [songs, catalog, votes] = await Promise.all([
         fetchSongs(period.id),
+        fetchSongCatalog(period.id).then(rows => ({ rows, error: "" })).catch(() => ({ rows: [], error: "可播曲库暂时无法读取，请刷新重试。" })),
         account ? fetchMyVotes(period.id, period.isTest).catch((error) => {
           if (authStore.qqUser?.openid === account) this.handleParticipationError(error);
           return { likes: [], dislikes: [], failed: true };
@@ -180,7 +184,10 @@ export const useSongsStore = defineStore("songs", {
         this.resetForNoPeriod();
         return;
       }
+      if (usePeriodStore().currentPeriod?.id !== period.id) return;
       this.songs = songs;
+      this.catalogSongs = catalog.rows;
+      this.catalogError = catalog.error;
       const sameAccount = account === authStore.qqUser?.openid;
       this.likedSongIds = new Set(sameAccount ? votes.likes : []);
       this.dislikedSongIds = new Set(sameAccount ? votes.dislikes : []);
@@ -193,6 +200,8 @@ export const useSongsStore = defineStore("songs", {
 
     resetForNoPeriod() {
       this.songs = [];
+      this.catalogSongs = [];
+      this.catalogError = "";
       this.likedSongIds = new Set();
       this.dislikedSongIds = new Set();
       this.personalVotesAccount = "";
@@ -266,7 +275,7 @@ export const useSongsStore = defineStore("songs", {
       return true;
     },
 
-    async submitSong(title, artist) {
+    async submitSong(catalogId) {
       if (this.isSubmitting) return false;
       const authStore = useAuthStore();
       const periodStore = usePeriodStore();
@@ -277,11 +286,13 @@ export const useSongsStore = defineStore("songs", {
         this.formHint = !authStore.isQqLoggedIn ? "游客模式仅可浏览，请先 QQ 登录再投稿。" : authStore.qqAccount?.moderation?.banned || authStore.qqAccount?.moderation?.submission_restricted ? "该账号暂不能投稿，请到个人中心查看处理详情。" : "当前暂时无法投稿，请查看征集状态或刷新页面重试。";
         return false;
       }
-      if (!title.trim() || !artist.trim()) {
+      const selected = this.catalogSongs.find(song => song.id === catalogId);
+      if (!selected) {
         this.formHintType = "error";
-        this.formHint = "请填写歌曲标题和歌手名称。";
+        this.formHint = "请先从可播歌曲库中选择歌曲。";
         return false;
       }
+      const { title, artist } = selected;
       if (this.songs.some((song) => song.titleLower === normalizeText(title) && song.artistLower === normalizeText(artist))) {
         this.formHintType = "error";
         this.formHint = "这首歌已经有人提交过啦，请勿重复投稿。";
@@ -294,8 +305,7 @@ export const useSongsStore = defineStore("songs", {
       this.formHintType = "";
       try {
         const submitted = await submitSong({
-          title: title.trim(),
-          artist: artist.trim(),
+          catalogId,
           playlistDate: period.id,
           isTest: period.isTest,
         });

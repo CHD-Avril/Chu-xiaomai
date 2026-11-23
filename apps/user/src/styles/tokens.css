@@ -1,0 +1,108 @@
+/* Morning radio: soft daylight glass, neutral structure, one blue-to-cyan accent. */
+:root {
+  color-scheme: light;
+
+  --canvas: #f2f5fa;
+  --canvas-deep: #e9eef7;
+
+  --ink: #17203a;
+  --text: var(--ink);
+  --text-strong: var(--ink);
+  --muted: #5a6a8a;
+  --muted-strong: #5a6a8a;
+  --faint: #8a97b3;
+
+  --line: rgba(23, 32, 58, 0.06);
+  --line-strong: rgba(23, 32, 58, 0.12);
+
+  --glass: rgba(255, 255, 255, 0.55);
+  --glass-soft: rgba(255, 255, 255, 0.45);
+  --glass-strong: rgba(255, 255, 255, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.75);
+  --glass-blur: blur(24px) saturate(160%);
+  --glass-shadow:
+    0 12px 32px rgba(90, 120, 180, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(120, 140, 180, 0.1);
+
+  --gradient: linear-gradient(135deg, #4f86ff, #38c6b8);
+  --blue: #4f86ff;
+  --blue-ink: #3f74e8;
+  --blue-hover: #2f63d9;
+  --blue-soft: rgba(79, 134, 255, 0.1);
+  --blue-line: rgba(79, 134, 255, 0.26);
+  --cyan: #38c6b8;
+  --teal: #4fd1c0;
+
+  --blob-peach: rgba(255, 196, 140, 0.45);
+  --blob-blue: rgba(140, 180, 255, 0.4);
+  --blob-pink: rgba(255, 170, 200, 0.32);
+  --blob-mint: rgba(140, 230, 200, 0.35);
+  --wave-blue: #7aa8ff;
+  --wave-cyan: #4fd1c0;
+  --wave-peach: #ffb27a;
+  --wave-pink: #ff9ec4;
+  --wave-lavender: #b39dff;
+
+  --danger: #a8554e;
+  --danger-bg: rgba(168, 85, 78, 0.08);
+  --danger-line: rgba(168, 85, 78, 0.22);
+  --green: #2f8f7a;
+  --green-bg: rgba(79, 209, 192, 0.12);
+  --green-line: rgba(79, 209, 192, 0.28);
+
+  --font-sans: "Inter Variable", "Inter", system-ui, -apple-system, "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --sans: var(--font-sans);
+  --font-latin: var(--font-sans);
+  --mono: "Inter Variable", ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-6: 48px;
+  --space-8: 64px;
+  --pad: 24px;
+
+  --radius-sm: 12px;
+  --radius-lg: 24px;
+  --radius-pill: 999px;
+
+  --sidebar-width: 264px;
+  --content-width: 1480px;
+  --tabbar-height: 72px;
+
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --t-micro: 200ms;
+  --t-button: 300ms;
+  --t-panel: 500ms;
+  --t-press: 120ms;
+  --transition: var(--t-micro) var(--ease);
+
+  --shadow-card: var(--glass-shadow);
+  --shadow-pop: 0 24px 64px rgba(90, 120, 180, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --shadow-soft: none;
+  --focus-ring: 0 0 0 2px rgba(79, 134, 255, 0.5);
+
+  /* Compatibility aliases used by remaining feature styles. */
+  --surface: var(--glass);
+  --surface-soft: rgba(255, 255, 255, 0.35);
+  --surface-strong: rgba(255, 255, 255, 0.72);
+  --brand: var(--blue-ink);
+  --brand-hover: var(--blue-hover);
+  --brand-soft: var(--blue-soft);
+  --brand-line: var(--blue-line);
+  --accent: var(--blue-ink);
+  --accent-hover: var(--blue-hover);
+  --accent-dim: var(--blue-soft);
+  --on-accent: #ffffff;
+  --signal: var(--blue);
+  --signal-strong: var(--blue-ink);
+  --signal-soft: var(--blue-soft);
+  --signal-line: var(--blue-line);
+  --yellow: var(--blue);
+  --yellow-ink: var(--blue-ink);
+  --yellow-bg: var(--blue-soft);
+  --yellow-line: var(--blue-line);
+  --yellow-soft: var(--blue-soft);
+}

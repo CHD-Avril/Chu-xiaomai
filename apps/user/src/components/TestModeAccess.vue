@@ -35,9 +35,9 @@ async function logout() {
     <template v-else>
       <p>当前征集期处于测试模式，请使用运营人员授权的测试账号登录后查看歌单、投稿和投票。</p>
       <form class="test-login-form" @submit.prevent="login">
-        <label class="field"><span>测试账号邮箱</span><input v-model="email" type="email" autocomplete="username" required :disabled="busy" placeholder="运营人员提供的账号邮箱" /></label>
-        <label class="field"><span>密码</span><input v-model="password" type="password" autocomplete="current-password" required :disabled="busy" /></label>
-        <button class="primary-button" type="submit" :disabled="busy">{{ busy ? '正在登录…' : '登录测试账号' }}</button>
+        <label class="field"><span>测试账号邮箱</span><input v-model="email" name="test-email" type="email" autocomplete="username" required :disabled="busy" placeholder="运营人员提供的账号邮箱" /></label>
+        <label class="field"><span>密码</span><input v-model="password" name="test-password" type="password" autocomplete="current-password" required :disabled="busy" /></label>
+        <button class="secondary-button" type="submit" :disabled="busy">{{ busy ? '正在登录…' : '登录测试账号' }}</button>
       </form>
       <p class="section-note">没有测试账号？请联系运营人员。正常征集期仍可免登录参与。</p>
     </template>
