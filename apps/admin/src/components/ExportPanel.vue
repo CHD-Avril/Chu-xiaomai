@@ -1,10 +1,11 @@
 <script setup>
-import { ElAlert, ElButton, ElCard, ElCheckbox, ElEmpty, ElInputNumber, ElOption, ElSelect, ElTable, ElTableColumn, ElTag, ElMessage, ElMessageBox } from "element-plus";
+import { ElAlert, ElButton, ElCard, ElCheckbox, ElEmpty, ElInput, ElInputNumber, ElOption, ElSelect, ElTable, ElTableColumn, ElTag, ElMessage, ElMessageBox } from "element-plus";
 import "element-plus/es/components/alert/style/css";
 import "element-plus/es/components/button/style/css";
 import "element-plus/es/components/card/style/css";
 import "element-plus/es/components/checkbox/style/css";
 import "element-plus/es/components/empty/style/css";
+import "element-plus/es/components/input/style/css";
 import "element-plus/es/components/input-number/style/css";
 import "element-plus/es/components/option/style/css";
 import "element-plus/es/components/select/style/css";
@@ -13,7 +14,7 @@ import "element-plus/es/components/table-column/style/css";
 import "element-plus/es/components/tag/style/css";
 import "element-plus/es/components/message/style/css";
 import "element-plus/es/components/message-box/style/css";
-import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
+import { computed, h, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from "vue-router";
 import { useAdminStore } from "../stores/admin";
 import { useAuthStore } from "../stores/auth";
@@ -149,21 +150,61 @@ function download(content, suffix, type = "text/plain;charset=utf-8") {
   const a = document.createElement("a"); a.href = url; a.download = sanitizeFilename(period.value?.title) + "_" + suffix + "_" + formatDateForFilename(new Date()) + (suffix === "data" ? ".json" : ".txt");
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
+async function prepareList(kind) {
+  if (kind === "broadcast") {
+    if (!boardReady.value || conflict.value) throw new Error("请先成功读取最新播出歌单");
+    if (dirty.value && !await save()) return;
+  }
+  songs.value = await api.fetchSongs(periodId.value);
+  const rows = kind === "broadcast" ? confirmed.value.map(i => i.song) : ranking.value;
+  if (kind === "broadcast" && rows.some(s => !s || s.isLocked)) throw new Error("确认歌单有歌曲已被锁定或移除，请重新读取并退回候选后保存。");
+  if (!rows.length) throw new Error(kind === "broadcast" ? "还没有确认播出的歌曲" : "没有符合条件的歌曲");
+  const title = kind === "broadcast" ? "确认播出歌单" : "排名参考清单";
+  const text = (period.value?.title || "") + " · " + title + "\n" + rows.map((s,i) => (i+1) + ". " + s.title + " - " + s.artist + " (" + s.likesCount + " 喜欢)" + (s.isLocked ? " [已锁定]" : "")).join("\n");
+  return { text, summary: rows.length + " 首" + title };
+}
+async function copyPreparedList(pendingList) {
+  try {
+    const clipboard = navigator.clipboard;
+    if (clipboard?.write && typeof ClipboardItem === "function") {
+      // Start the clipboard write during the click and supply the text after validation.
+      const content = pendingList.then(list => {
+        if (!list) throw new Error("播出歌单保存失败");
+        return new Blob([list.text], { type: "text/plain" });
+      });
+      // A denied write may never read the content promise.
+      content.catch(() => {});
+      await clipboard.write([new ClipboardItem({ "text/plain": content })]);
+      return true;
+    }
+    if (clipboard?.writeText) {
+      const list = await pendingList;
+      if (!list) return false;
+      await clipboard.writeText(list.text);
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
 async function exportList(kind, copy) {
+  if (busy.value) return;
   exporting.value = true;
   try {
-    if (kind === "broadcast") {
-      if (!boardReady.value || conflict.value) throw new Error("请先成功读取最新播出歌单");
-      if (dirty.value && !await save()) return;
+    const pendingList = prepareList(kind);
+    const copied = copy && copyPreparedList(pendingList);
+    const list = await pendingList;
+    if (!list) return;
+    if (copy && !await copied) {
+      ElMessageBox.alert(h("div", [
+        h("p", "当前浏览器未能自动复制。请长按或选中文本后复制。"),
+        h(ElInput, { modelValue: list.text, type: "textarea", rows: 6, readonly: true, "aria-label": "歌单文本" }),
+      ]), "手动复制歌单", { confirmButtonText: "关闭" }).catch(() => {});
+      return;
     }
-    songs.value = await api.fetchSongs(periodId.value);
-    const rows = kind === "broadcast" ? confirmed.value.map(i => i.song) : ranking.value;
-    if (kind === "broadcast" && rows.some(s => !s || s.isLocked)) throw new Error("确认歌单有歌曲已被锁定或移除，请重新读取并退回候选后保存。");
-    if (!rows.length) throw new Error(kind === "broadcast" ? "还没有确认播出的歌曲" : "没有符合条件的歌曲");
-    const title = kind === "broadcast" ? "确认播出歌单" : "排名参考清单";
-    const text = (period.value?.title || "") + " · " + title + "\n" + rows.map((s,i) => (i+1) + ". " + s.title + " - " + s.artist + " (" + s.likesCount + " 喜欢)" + (s.isLocked ? " [已锁定]" : "")).join("\n");
-    if (copy) await navigator.clipboard.writeText(text); else download(text, kind);
-    ElMessage.success((copy ? "已复制 " : "已下载 ") + rows.length + " 首" + title);
+    if (!copy) download(list.text, kind);
+    ElMessage.success((copy ? "已复制 " : "已下载 ") + list.summary);
   } catch(e) { ElMessage.error(e.message || "导出失败"); } finally { exporting.value = false; }
 }
 async function exportData() {

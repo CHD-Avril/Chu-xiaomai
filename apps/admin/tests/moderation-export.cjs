@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
-const { ref, computed, watch, effectScope } = require("vue");
+const { ref, computed, watch, effectScope, h } = require("vue");
 const { parse } = require("@vue/compiler-sfc");
 
 function readComponent(relativePath) {
@@ -40,7 +40,7 @@ function setupComponent(t, relativePath, exposed, overrides = {}) {
 
 function setupExport(t, api, overrides) {
   const panel = setupComponent(t, "components/ExportPanel.vue", [
-    "generateBroadcastList", "switchPeriod", "allowLeave", "periodId", "songs", "items", "baseline",
+    "exportList", "generateBroadcastList", "switchPeriod", "allowLeave", "periodId", "songs", "items", "baseline",
     "autoCount", "busy", "generating", "boardReady", "remoteVersion",
   ], { api, ...overrides });
   panel.periodId.value = "A";
@@ -56,6 +56,72 @@ function deferred() {
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 }
+
+class TestClipboardItem {
+  constructor(data) {
+    this.data = data;
+  }
+}
+
+test("copy starts during the click and supplies the latest ranking after loading", async t => {
+  const response = deferred();
+  let content, copied;
+  const panel = setupExport(t, { fetchSongs: () => response.promise }, {
+    Blob, ClipboardItem: TestClipboardItem,
+    navigator: { clipboard: { async write([item]) {
+      content = item.data["text/plain"];
+      copied = await (await content).text();
+    } } },
+  });
+
+  const exportRequest = panel.exportList("ranking", true);
+  assert.ok(content, "clipboard write must start before the network response");
+  assert.equal(copied, undefined);
+  response.resolve([{ id: "latest", title: "晴天", artist: "周杰伦", likesCount: 12 }]);
+  await exportRequest;
+
+  assert.match(copied, /1\. 晴天 - 周杰伦 \(12 喜欢\)/);
+  assert.deepEqual(panel.messages, [{ kind: "success", text: "已复制 1 首排名参考清单" }]);
+  assert.equal(panel.busy.value, false);
+});
+
+test("a denied clipboard write shows the prepared playlist for manual copying", async t => {
+  const dialogs = [];
+  const panel = setupExport(t, { fetchSongs: async () => [
+    { id: "original", title: "日落", artist: "孙燕姿", likesCount: 7 },
+  ] }, {
+    Blob, ClipboardItem: TestClipboardItem, h, ElInput: "textarea",
+    navigator: { clipboard: { write: async () => { throw new DOMException("denied", "NotAllowedError"); } } },
+    ElMessageBox: { alert: async (body, title) => { dialogs.push({ body, title }); } },
+  });
+
+  await panel.exportList("broadcast", true);
+
+  assert.equal(dialogs.length, 1);
+  assert.equal(dialogs[0].title, "手动复制歌单");
+  const textField = dialogs[0].body.children[1];
+  assert.equal(textField.props.readonly, true);
+  assert.match(textField.props.modelValue, /1\. 日落 - 孙燕姿 \(7 喜欢\)/);
+  assert.deepEqual(panel.messages, []);
+  assert.equal(panel.busy.value, false);
+});
+
+test("a denied write cannot mask a newly locked song in the broadcast playlist", async t => {
+  const panel = setupExport(t, { fetchSongs: async () => [
+    { id: "original", isLocked: true },
+  ] }, {
+    Blob, ClipboardItem: TestClipboardItem,
+    navigator: { clipboard: { write: async () => { throw new DOMException("denied", "NotAllowedError"); } } },
+    ElMessageBox: { alert: () => assert.fail("invalid playlist must not be shown for copying") },
+  });
+
+  await panel.exportList("broadcast", true);
+
+  assert.equal(panel.messages.length, 1);
+  assert.equal(panel.messages[0].kind, "error");
+  assert.match(panel.messages[0].text, /歌曲已被锁定或移除/);
+  assert.equal(panel.busy.value, false);
+});
 
 test("all changed Vue templates compile without syntax errors", () => {
   for (const file of ["components/AutoModerationPanel.vue", "components/ExportPanel.vue", "views/DashboardView.vue"]) {
