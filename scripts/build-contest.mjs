@@ -16,8 +16,13 @@ if (existsSync(envFile)) {
 }
 const supabaseUrl = process.env.VITE_SUPABASE_URL || fileEnv.VITE_SUPABASE_URL || "";
 const anonKey = process.env.VITE_ANON_KEY || fileEnv.VITE_ANON_KEY || "";
-if (!supabaseUrl || !anonKey) {
-  console.warn("警告：未配置演示库 VITE_SUPABASE_URL / VITE_ANON_KEY，使用占位值构建（仅验证编译，页面无法读数据）。");
+const allowPlaceholder = process.env.CHU_ALLOW_PLACEHOLDER_BUILD === "1";
+const placeholder = !supabaseUrl || !anonKey || /placeholder/i.test(`${supabaseUrl} ${anonKey}`);
+if (placeholder && !allowPlaceholder) {
+  throw new Error("缺少演示库 VITE_SUPABASE_URL / VITE_ANON_KEY。请先配置 contest/.env.contest；仅本地编译验证可设置 CHU_ALLOW_PLACEHOLDER_BUILD=1。");
+}
+if (placeholder) {
+  console.warn("警告：当前为占位值构建，仅验证编译，页面无法读取演示库数据。");
 }
 const common = {
   ...process.env,

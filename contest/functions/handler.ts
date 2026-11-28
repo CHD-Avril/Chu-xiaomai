@@ -3,6 +3,8 @@
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DEMO_APP_ID = "9000000001";
+const DEMO_EMAILS = new Set(["admin@chu.demo", "judge@chu.demo", "student@chu.demo"]);
+const MAX_BODY_BYTES = 8192;
 
 type DbEnv = { url: string; key: string };
 type DemoUser = { id: string; nickname: string };
@@ -45,17 +47,38 @@ async function verifyUser(env: DbEnv, authorization: string | null): Promise<Dem
   });
   if (!response.ok) return null;
   const account = await response.json();
-  if (!UUID.test(account?.id || "")) return null;
-  const nickname = String(account.user_metadata?.nickname || String(account.email || "").split("@")[0] || "演示用户").slice(0, 100);
+  const email = String(account?.email || "").trim().toLowerCase();
+  if (!UUID.test(account?.id || "") || !DEMO_EMAILS.has(email)) return null;
+  const nickname = String(account.user_metadata?.nickname || email.split("@")[0] || "演示用户").slice(0, 100);
   return { id: account.id, nickname };
 }
 
 async function readBody(request: Request): Promise<Record<string, unknown>> {
   if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get("content-type") || "")) throw gatewayError("invalid_request");
-  const text = await request.text();
-  if (text.length > 8192) throw gatewayError("invalid_request", 413);
+  const contentLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) throw gatewayError("invalid_request", 413);
+  const reader = request.body?.getReader();
+  if (!reader) throw gatewayError("invalid_request");
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_BODY_BYTES) {
+      await reader.cancel().catch(() => {});
+      throw gatewayError("invalid_request", 413);
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
   let body: unknown;
-  try { body = JSON.parse(text); } catch { throw gatewayError("invalid_request"); }
+  try { body = JSON.parse(new TextDecoder().decode(bytes)); } catch { throw gatewayError("invalid_request"); }
   if (!body || typeof body !== "object" || Array.isArray(body)) throw gatewayError("invalid_request");
   return body as Record<string, unknown>;
 }

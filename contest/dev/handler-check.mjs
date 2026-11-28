@@ -4,6 +4,7 @@ const UID = "33333333-3333-4333-8333-333333333333";
 const PERIOD = "11111111-1111-4111-8111-111111111111";
 const SONG = "22222222-2222-4222-8222-222222222222";
 const TOKEN = "eyJhbGciOiJIUzI1NiJ9.demo-token-value-0123456789";
+const OUTSIDER_TOKEN = "eyJhbGciOiJIUzI1NiJ9.outsider-token-value-0123456789";
 
 let envMap = {};
 let rpcStatus = 200;
@@ -15,7 +16,10 @@ globalThis.fetch = async (input, options = {}) => {
   calls.push({ url, body, headers: options.headers });
   if (url.endsWith("/auth/v1/user")) {
     if (options.headers?.Authorization === `Bearer ${TOKEN}`) {
-      return Response.json({ id: UID, email: "demo@chu.example", user_metadata: { nickname: "评委同学" } });
+      return Response.json({ id: UID, email: "judge@chu.demo", user_metadata: { nickname: "评委同学" } });
+    }
+    if (options.headers?.Authorization === `Bearer ${OUTSIDER_TOKEN}`) {
+      return Response.json({ id: UID, email: "outsider@example.com", user_metadata: { nickname: "外部账号" } });
     }
     return Response.json({ message: "invalid" }, { status: 401 });
   }
@@ -30,11 +34,12 @@ globalThis.fetch = async (input, options = {}) => {
 };
 
 const { handler } = await import("../functions/handler.ts");
-const req = (path, { method = "GET", token, body } = {}) => handler(new Request(`https://demo.qoder.zone/functions/v1/app${path}`, {
+const req = (path, { method = "GET", token, body, headers = {} } = {}) => handler(new Request(`https://demo.qoder.zone/functions/v1/app${path}`, {
   method,
   headers: {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+    ...headers,
   },
   body: body !== undefined ? JSON.stringify(body) : undefined,
 }));
@@ -54,9 +59,11 @@ data = await (await req("/session", { token: TOKEN })).json();
 assert.equal(data.user.openid, `DEMO_${UID}`);
 assert.equal(data.user.nickname, "评委同学");
 assert.equal((await (await req("/session", { token: "bad" })).json()).user, null);
+assert.equal((await (await req("/session", { token: OUTSIDER_TOKEN })).json()).user, null, "confirmed non-demo accounts are rejected");
 
 // 3. Participation requires a verified demo account.
 assert.equal((await req("/participate", { method: "POST", body: { operation: "votes", periodId: PERIOD } })).status, 401);
+assert.equal((await req("/participate", { method: "POST", token: OUTSIDER_TOKEN, body: { operation: "votes", periodId: PERIOD } })).status, 401);
 
 // 4. Votes gateway params.
 calls.length = 0;
@@ -90,14 +97,30 @@ assert.equal((await req("/participate", { method: "POST", token: TOKEN, body: { 
 // 7. Routing and methods.
 assert.equal((await req("/participate")).status, 404);
 assert.equal((await req("/nope")).status, 404);
+assert.equal((await req("/session", { method: "OPTIONS" })).status, 404);
 assert.equal((await handler(new Request(`https://demo.qoder.zone/functions/v1/physical123/session`))).status, 200);
 assert.equal((await req("/logout", { method: "POST" })).status, 200);
 
-// 8. Upstream failure and oversized body.
+// 8. Upstream failure, content type and oversized bodies.
+assert.equal((await req("/participate", { method: "POST", token: TOKEN, body: { operation: "votes", periodId: PERIOD }, headers: { "Content-Type": "text/plain" } })).status, 400);
+assert.equal((await req("/participate", { method: "POST", token: TOKEN, body: { operation: "votes", periodId: PERIOD }, headers: { "Content-Length": "9000" } })).status, 413);
 rpcStatus = 500;
 assert.equal((await req("/participate", { method: "POST", token: TOKEN, body: { operation: "votes", periodId: PERIOD } })).status, 503);
 rpcStatus = 200;
 assert.equal((await req("/participate", { method: "POST", token: TOKEN, body: { operation: "votes", periodId: PERIOD, pad: "x".repeat(9000) } })).status, 413);
+const streamRequest = new Request("https://demo.qoder.zone/functions/v1/app/participate", {
+  method: "POST",
+  headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
+  duplex: "half",
+  body: new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(JSON.stringify({ operation: "votes", periodId: PERIOD, pad: "x".repeat(9000) })));
+      controller.close();
+    },
+  }),
+});
+streamRequest.headers.delete("content-length");
+assert.equal((await handler(streamRequest)).status, 413);
 
 // 9. Health probe.
 assert.equal((await req("/participation-health")).status, 200);
